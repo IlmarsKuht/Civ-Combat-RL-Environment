@@ -227,6 +227,7 @@ class Terrain:
         #So don't know + reward for attacking or - reward for being attacked
 
     def _kill_troop(self, troop):
+        return
         #I need to remove the troop from player troops and the tile, how
 
 
