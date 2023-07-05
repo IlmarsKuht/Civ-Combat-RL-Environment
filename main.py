@@ -23,7 +23,7 @@ class Civ6CombatEnv(gym.Env):
     """Custom Environment that follows gym interface."""
 
     #layer can try rgb_array rendering for CNNs.
-    metadata = {"render_modes": ["human"], "render_fps": 1}
+    metadata = {"render_modes": ["human"], "render_fps": 5}
 
     def __init__(self, render_mode=None):
         super().__init__()
@@ -67,15 +67,15 @@ class Civ6CombatEnv(gym.Env):
 
     def step(self, action):
         #do the action
+        reward = 0
         if self.troop_chosen:
-            self.terrain.action(action, self.troop_chosen)
+            reward += self.terrain.action(action, self.troop_chosen)
+            self._clean_up(self.player)
+            self._clean_up(self.bot)
         else:
             print("No troop chosen")
         #check if the game has ended or truncated
-        terminated, truncated = False, False
-
-        #calculate reward
-        reward = 0
+        terminated, truncated = False, False     
 
         #get the observations and additonal info
         observation = self._get_obs()
@@ -87,14 +87,19 @@ class Civ6CombatEnv(gym.Env):
         #do AI move and render again
         if self.ai_turn:
             action, troop = self._rand_action(self.bot)
-            self.terrain.action(action, troop)
-            if self.render_mode == "human":
-                self._render_frame()
+            if action is not None and troop is not None:
+                reward -= self.terrain.action(action, troop)
 
             self._reset_moves(self.player)
             self._reset_moves(self.bot)
+            self._clean_up(self.player)
+            self._clean_up(self.bot)
             observation = self._get_obs()
             info = self._get_info()
+
+            if self.render_mode == "human":
+                self._render_frame()
+
 
         return observation, reward, terminated, truncated, info
 
@@ -119,7 +124,7 @@ class Civ6CombatEnv(gym.Env):
         self._create_building(self.bot, 200, 50, BuildingType.CENTER, 4, 1)
 
         self._create_troop(self.player, 100, 30, 2, 2, TroopType.WARRIOR, 0, 2)
-        self._create_troop(self.bot, 100, 30, 2, 2, TroopType.WARRIOR, 4, 2)
+        self._create_troop(self.bot, 100, 25, 2, 2, TroopType.WARRIOR, 4, 2)
         
         observation = self._get_obs()
         info = self._get_info()
@@ -160,8 +165,11 @@ class Civ6CombatEnv(gym.Env):
         player.buildings.append(self.terrain[row][col].building)
 
     def _rand_action(self, player : Player):
-        troop = random.choice(player.troops)
-        possible_moves = self.terrain.get_reachable_pos(troop.row, troop.col, troop.moves)
+        if len(player.troops) != 0:
+            troop = random.choice(player.troops)
+        else:
+            return None, None
+        possible_moves = self.terrain.get_reachable_pos(troop)
 
         # Get the coordinates of all reachable positions
         reachable_positions = np.argwhere(possible_moves == 1)
@@ -175,17 +183,27 @@ class Civ6CombatEnv(gym.Env):
 
         return rand_pos, troop  # rand_pos is a numpy array [row, col]
     
+    
+    #COULD COMBINE RESET MOVES AND CLEAN UP IN ONE FUNCTION? OR NOT BECUASE CLEAN UP AFTER EVERY STEP 
+    # BUT RESET MOVES ONLY AFTER THE AI MOVES
     def _reset_moves(self, player : Player):
         for troop in player.troops:
             troop.moves = troop.max_moves
+
+    #removes dead troops from players
+    def _clean_up(self, player):
+        for troop in player.troops:
+            if troop.health <= 0:
+                player.troops.remove(troop)
 
 
 def main():
     from stable_baselines3.common.env_checker import check_env
     env = Civ6CombatEnv(render_mode="human")
-    check_env(env)
+    #check_env(env)
     env.reset()
-    env.step([1, 5])
+    while True:
+        env.step(env.action_space.sample())
          
 
 

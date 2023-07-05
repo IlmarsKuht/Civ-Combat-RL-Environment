@@ -5,7 +5,7 @@ import random
 import numpy as np
 
 
-from options import BuildingType, TroopType, TileType, CnnChannels, PLAYER_COLORS
+from options import BuildingType, TroopType, TileType, CnnChannels, Rewards, PLAYER_COLORS
 
 
 class Player:
@@ -74,13 +74,31 @@ class Tile:
         if self.troop:
             color = PLAYER_COLORS[self.troop.player_id % len(PLAYER_COLORS)]
             troop_rect = pygame.Rect(self.x - self.size/4, self.y - self.size/4, self.size/2, self.size/2)  # creating a rectangle
-            pygame.draw.rect(window, color, troop_rect)
-        
+            self._draw_entity(window, self.troop, troop_rect, color, self.y - self.size/4 + troop_rect.height + 5, self.y - self.size/2, 100)
+
         # Draw Building
         if self.building:
             color = PLAYER_COLORS[self.building.player_id % len(PLAYER_COLORS)]
-            pygame.draw.circle(window, color, (self.x, self.y), self.size/4)
+            building_rect = pygame.Rect(self.x - self.size/4, self.y - self.size/4, self.size/2, self.size/2)  # creating a rectangle
+            self._draw_entity(window, self.building, building_rect, color, self.y + building_rect.height + 5, self.y - self.size/2, 200)
 
+    def _draw_entity(self, window, entity, entity_rect, entity_color, health_bar_y, power_text_y, max_health):
+        # Entity itself
+        pygame.draw.rect(window, entity_color, entity_rect)
+
+        # Health Bar
+        health_bar_width = self.size / 2
+        health = entity.health / max_health  # Health as a percentage
+        green_width = health * health_bar_width
+        red_width = (1 - health) * health_bar_width
+        pygame.draw.rect(window, (0, 255, 0), (self.x - self.size/4, health_bar_y, green_width, 5))  # Green part
+        pygame.draw.rect(window, (255, 0, 0), (self.x - self.size/4 + green_width, health_bar_y, red_width, 5))  # Red part
+
+        # Power number
+        font = pygame.font.Font(None, 24)  # You can choose the font and size
+        power_text = font.render(str(entity.power), True, (255, 255, 255))  # Black text
+        power_text_rect = power_text.get_rect(center=(self.x, power_text_y))  # Above the entity
+        window.blit(power_text, power_text_rect)
 
 class Terrain:
     def __init__(self, row_count, column_count, draw=False, size=None, margin=None):
@@ -110,23 +128,32 @@ class Terrain:
             tiles.append(rows)
         return np.array(tiles)
     
-    def get_reachable_pos(self, x, y, movement):
+    #this could probably be optimized
+    def get_reachable_pos(self, troop):
         observation = np.full((self.row_count, self.column_count), -1)
         # Define the directions for the six neighbors in a hexagonal grid
         directions_odd = [(-1, 0), (-1, 1), (0, 1), (1, 1), (1, 0), (0, -1)]
         directions_even = [(-1, -1), (-1, 0), (0, 1), (1, 0), (1, -1), (0, -1)]
         # Use a queue to perform a breadth-first search
-        queue = [(x, y, movement)]
+        queue = [(troop.row, troop.col, troop.moves)]
         while queue:
             curr_x, curr_y, movement_left = queue.pop(0)
-            # Not reachable or already visited
-            if movement_left < 0 or observation[curr_x, curr_y] == 1:
+            # Not reachable
+            if movement_left < 0 or self.tiles[curr_x, curr_y].obstacle:
                 continue
-            # Occupied already (exception for starting position)
-            if (curr_x != x or curr_y != y) and (self.tiles[curr_x, curr_y].troop or self.tiles[curr_x, curr_y].building or self.tiles[curr_x, curr_y].obstacle):
+
+            # Check the tile's troop and building
+            tile_troop = self.tiles[curr_x, curr_y].troop
+            tile_building = self.tiles[curr_x, curr_y].building
+            if (curr_x != troop.row or curr_y != troop.col) and ((tile_troop and tile_troop.player_id == troop.player_id) or (tile_building and tile_building.player_id == troop.player_id)):
                 observation[curr_x, curr_y] = 0
                 continue
-            observation[curr_x, curr_y] = 1
+            elif (tile_troop and tile_troop.player_id != troop.player_id) or (tile_building and tile_building.player_id != troop.player_id):
+                observation[curr_x, curr_y] = 1
+                continue
+            else:
+                observation[curr_x, curr_y] = 1
+
             directions = directions_even if curr_x % 2 == 0 else directions_odd
             for dx, dy in directions:
                 nx, ny = curr_x + dx, curr_y + dy
@@ -171,7 +198,7 @@ class Terrain:
                         observation[row, col, CnnChannels.UNIT_TO_MOVE.value] = 1
                         troop_chosen = troop
                         #mark reachable positions
-                        observation[:, :, CnnChannels.CAN_MOVE.value] = self.get_reachable_pos(row, col, troop.moves)
+                        observation[:, :, CnnChannels.CAN_MOVE.value] = self.get_reachable_pos(troop)
 
 
         #normalize power and health between 0 and 1
@@ -185,29 +212,49 @@ class Terrain:
     
     def action(self, action, troop):
         # Move the troop to the new tile and clear the old tile
+
         new_row, new_col = action
-        if self.tiles[new_row][new_col].troop == None:
+        reward = 0
+        #ATTACK NOT WORKING FOR BUILDINGS YET
+        tile_troop = self.tiles[new_row, new_col].troop
+        tile_building = self.tiles[new_row, new_col].building
+        if tile_troop is None and tile_building is None:
             reward = self._move(action, troop)
-        else:
-            reward = self._attack(action, troop)
+        elif tile_troop and tile_troop.row==troop.row and tile_troop.col==troop.col:
+            reward = self._fortify(troop)
+        #attacking check if the distance is bigger than 1, if yes then first move to the target, then attack
+        elif tile_troop:
+            reward = self._attack_troop(action, troop)
+        elif tile_building:
+            reward = self._attack_building(action, troop)
 
         return reward
-       
 
-    #function to move troop
+    def draw(self, window):
+        for row in self.tiles:
+            for tile in row:
+                tile.draw(window)
+       
+    def _fortify(self, troop):
+        troop.moves = 0
+        reward = Rewards.DEFAULT.value
+        return reward
     def _move(self, action, troop):
-        new_row, new_col = action
-        self.tiles[new_row][new_col].troop = troop
-        self.tiles[troop.row][troop.col].troop = None
-        troop.row = new_row
-        troop.col = new_col
+        #don't set the moves to zero, instead minus the moves made by the player so he can move and attack
         troop.moves = 0
 
-        reward = 0
+        new_row, new_col = action
+        self.tiles[troop.row][troop.col].troop = None
+        self.tiles[new_row][new_col].troop = troop
+        troop.row = new_row
+        troop.col = new_col
+        
+        
+        reward = Rewards.DEFAULT.value
         return reward
 
-    #function to attack
-    def _attack(self, action, attacker):
+    def _attack_troop(self, action, attacker):
+        attacker.moves = 0
         row, col = action
         #get the defending and attacking troops power
         defender = self.tiles[row, col].troop
@@ -216,30 +263,60 @@ class Terrain:
         attack_power = attacker.power
         #formula: Damage(HP)=30*e^{0.04*StrengthDifference}*randomBetween(0.8-1.2)}
         rand = random.uniform(0.8, 1.2)
-        damage = 30*math.exp(0.04 * (attack_power-def_power)) * rand
+        damage_to_defender = 30*math.exp(0.04 * (attack_power-def_power)) * rand
+        damage_to_attacker = 30*math.exp(0.04 * (def_power-attack_power)) * rand
 
-        defender.health -= damage
+        defender.health -= damage_to_defender
+        attacker.health -= damage_to_attacker
+        print(f"Attacking troop at {row}, {col}, damage dealt: {damage_to_defender}, damage received: {damage_to_attacker}")
+
+        #NEED A CONDITION WHERE BOTH UNITS CAN'T DIE, PROBABLY THE UNIT THAT HAS HIGHER HEALTH THAN THE OTHER ONE STAYS ALIVE
+        reward = Rewards.ATTACK.value
 
         if defender.health <= 0:
             self._kill_troop(defender)
+            reward = Rewards.KILL_TROOP.value
+        elif attacker.health <= 0:
+            self._kill_troop(attacker)
+            reward = Rewards.LOSE_TROOP.value
+        return reward
+    
+    def _attack_building(self, action, attacker):
+        attacker.moves = 0
+        row, col = action
+        #get the defending and attacking troops power
+        defender = self.tiles[row, col].building
+        def_power = defender.power
+
+        attack_power = attacker.power
+        #formula: Damage(HP)=30*e^{0.04*StrengthDifference}*randomBetween(0.8-1.2)}
+        rand = random.uniform(0.8, 1.2)
+        damage_to_defender = 30*math.exp(0.04 * (attack_power-def_power)) * rand
+        damage_to_attacker = 30*math.exp(0.04 * (def_power-attack_power)) * rand
+
+        defender.health -= damage_to_defender
+        attacker.health -= damage_to_attacker
+        print(f"Attacking city at {row}, {col}, damage dealt: {damage_to_defender}, damage received: {damage_to_attacker}")
+
+        #NEED A CONDITION WHERE BOTH UNITS CAN'T DIE, PROBABLY THE UNIT THAT HAS HIGHER HEALTH THAN THE OTHER ONE STAYS ALIVE
+        reward = Rewards.ATTACK.value
+
+        if defender.health <= 0:
+            self._kill_city(defender)
+            reward = Rewards.KILL_CITY.value
+        elif attacker.health <= 0:
+            self._kill_troop(attacker)
+            reward = Rewards.KILL_TROOP.value
+        return reward
+        
 
         #have to check what reward to return, because I don't know if my troops are being attacked or enemies :)
         #So don't know + reward for attacking or - reward for being attacked
 
     def _kill_troop(self, troop):
-        return
-        #I need to remove the troop from player troops and the tile, how
-
-
-        
-
-
-
-    
-    def draw(self, window):
-        for row in self.tiles:
-            for tile in row:
-                tile.draw(window)
+        self.tiles[troop.row, troop.col].troop = None
+    def _kill_city(self, troop):
+        self.tiles[troop.row, troop.col].troop = None
 
 
 

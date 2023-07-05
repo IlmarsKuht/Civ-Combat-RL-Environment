@@ -24,4 +24,13 @@ class CnnChannels(Enum):
     POWER = 3
     CAN_MOVE = 4
     UNIT_TO_MOVE = 5
+
+class Rewards(Enum):
+    KILL_TROOP = 10
+    LOSE_TROOP = -10
+    KILL_CITY = 100
+    LOSE_CITY = -100
+    ATTACK = 1
+    DEFAULT = 0
+
     

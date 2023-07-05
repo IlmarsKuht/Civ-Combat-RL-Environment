@@ -15,8 +15,23 @@ What features to choose (NxN feature maps):
 
 
 
-DO MASKED ACTION POLICY
 
-AFTER THE AI MOVES RESET THE MOVEMENTS BACK
+POWER IS DECREASED FOR MISSING HEALTH AND THERE ARE OTHER DEBUFFS..
+MAKE VARIABLES WITH DEBUFFS AND WHEN THEY DISAPPEAR
+Do I have to make the human be able to make moves?
 
-I am currently at trying to make the AI give a random move
+When attacking the player can only move there if the unit is killed, otherwise stay in the same place 
+Also if attacking from 2 tiles we should move the player one tile closer and only then attack, might be a little difficult to make
+Or just w
+
+Finish the game when all the troops die? sure
+
+If you stay in the same place, remove all movement.
+Otherwise remove movement however much you moved.
+
+AI just walked through the city, get_reachable_pos doesn't work correctly
+
+I want to already mask what is possible and what is not (not allow to make invalid moves)
+
+no masking ,just return a large negative reward if invalid action 
+
