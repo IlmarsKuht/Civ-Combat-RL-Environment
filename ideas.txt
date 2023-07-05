@@ -1,0 +1,22 @@
+Let's try observation space like this now:
+Use CNN with PPO!
+NxN matrices for each feature
+
+Give minus reward for a bad move
+
+
+What features to choose (NxN feature maps):
+    1) isEnemyBuilding
+    3) isEnemyTroop
+    2) Health
+    3) Power
+    4) canMove
+    5) Unit to move
+
+
+
+DO MASKED ACTION POLICY
+
+AFTER THE AI MOVES RESET THE MOVEMENTS BACK
+
+I am currently at trying to make the AI give a random move
