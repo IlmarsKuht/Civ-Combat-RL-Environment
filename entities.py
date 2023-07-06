@@ -5,7 +5,8 @@ import random
 import numpy as np
 
 
-from options import BuildingType, TroopType, TileType, CnnChannels, Rewards, PLAYER_COLORS
+from options import BuildingType, TroopType, TileType, CnnChannels, Rewards, PLAYER_COLORS, \
+DIRECTIONS_ODD, DIRECTIONS_EVEN
 
 
 class Player:
@@ -128,37 +129,96 @@ class Terrain:
             tiles.append(rows)
         return np.array(tiles)
     
+    #I NEED TO COMBINE SOMEHOW THESE 3 LARGE FUNCTIONS
+
+    def find_closest_adjacent_tile(self, row, col, troop):
+        target_row, target_col = None, None
+        
+        # Get all adjacent cells of the target
+        target_directions = DIRECTIONS_EVEN if row % 2 == 0 else DIRECTIONS_ODD
+        adjacent_cells = [(row + dx, col + dy) for dx, dy in target_directions
+                        if 0 <= row + dx < self.row_count and 0 <= col + dy < self.column_count]
+
+        # Use a queue to perform a breadth-first search
+        # x, y, movement_points, how many moves
+        queue = [(troop.row, troop.col, troop.moves, 0)]
+        while queue:
+            curr_x, curr_y, movement_left, moves = queue.pop(0)
+            # Not reachable
+            if movement_left < 0 or self.tiles[curr_x, curr_y].obstacle:
+                continue
+            # Reached adjacent cell to target
+            if (curr_x, curr_y) in adjacent_cells:
+                target_row, target_col = curr_x, curr_y
+                break
+            directions = DIRECTIONS_EVEN if curr_x % 2 == 0 else DIRECTIONS_ODD
+            for dx, dy in directions:
+                nx, ny = curr_x + dx, curr_y + dy
+                if nx >= 0 and nx < self.row_count and ny >= 0 and ny < self.column_count:
+                    queue.append((nx, ny, movement_left - 1, moves+1))
+
+        return target_row, target_col
+
+
+    def get_nearest_troop(self, row, col, troops):
+        nearest_troop = None
+        min_moves = float('inf')
+
+        for troop in troops:
+            #x, y, movement_points, how many moves
+            queue = [(troop.row, troop.col, troop.moves, 0)]
+
+            while queue:
+                curr_x, curr_y, movement_left, moves = queue.pop(0)
+                # Not reachable
+                if movement_left < 0 or self.tiles[curr_x, curr_y].obstacle:
+                    continue
+
+                # Reached target
+                if curr_x == row and curr_y == col:
+                    if moves < min_moves:
+                        min_moves = moves
+                        nearest_troop = troop
+                    break
+
+                directions = DIRECTIONS_EVEN if curr_x % 2 == 0 else DIRECTIONS_ODD
+                for dx, dy in directions:
+                    nx, ny = curr_x + dx, curr_y + dy
+                    if nx >= 0 and nx < self.row_count and ny >= 0 and ny < self.column_count:
+                        queue.append((nx, ny, movement_left - 1, moves+1))
+
+        return nearest_troop
+    
     #this could probably be optimized
     def get_reachable_pos(self, troop):
         observation = np.full((self.row_count, self.column_count), -1)
-        # Define the directions for the six neighbors in a hexagonal grid
-        directions_odd = [(-1, 0), (-1, 1), (0, 1), (1, 1), (1, 0), (0, -1)]
-        directions_even = [(-1, -1), (-1, 0), (0, 1), (1, 0), (1, -1), (0, -1)]
         # Use a queue to perform a breadth-first search
         queue = [(troop.row, troop.col, troop.moves)]
         while queue:
             curr_x, curr_y, movement_left = queue.pop(0)
             # Not reachable
-            if movement_left < 0 or self.tiles[curr_x, curr_y].obstacle:
+            if movement_left < 0 or self.tiles[curr_x, curr_y].obstacle or self.tiles[curr_x, curr_y] == 1:
                 continue
 
             # Check the tile's troop and building
             tile_troop = self.tiles[curr_x, curr_y].troop
             tile_building = self.tiles[curr_x, curr_y].building
-            if (curr_x != troop.row or curr_y != troop.col) and ((tile_troop and tile_troop.player_id == troop.player_id) or (tile_building and tile_building.player_id == troop.player_id)):
+            if (curr_x != troop.row or curr_y != troop.col) \
+            and ((tile_troop and tile_troop.player_id == troop.player_id) \
+            or (tile_building and tile_building.player_id == troop.player_id)):
                 observation[curr_x, curr_y] = 0
                 continue
-            elif (tile_troop and tile_troop.player_id != troop.player_id) or (tile_building and tile_building.player_id != troop.player_id):
+            elif (tile_troop and tile_troop.player_id != troop.player_id) \
+                or (tile_building and tile_building.player_id != troop.player_id):
                 observation[curr_x, curr_y] = 1
                 continue
             else:
                 observation[curr_x, curr_y] = 1
 
-            directions = directions_even if curr_x % 2 == 0 else directions_odd
+            directions = DIRECTIONS_EVEN if curr_x % 2 == 0 else DIRECTIONS_ODD
             for dx, dy in directions:
                 nx, ny = curr_x + dx, curr_y + dy
                 if nx >= 0 and nx < self.row_count and ny >= 0 and ny < self.column_count:
-                    
                     queue.append((nx, ny, movement_left - 1))
         return observation
 
@@ -167,12 +227,13 @@ class Terrain:
         observation = np.full((self.row_count, self.column_count, len(CnnChannels)), -1, dtype=np.float32)
 
         #For now let's assume that the player with id 0 is our player and all others are enemies
-        troop_chosen = None
 
         #Keep track of them, I need to normalize them afterwards
         #Format [(value, (x, y)), (value2, (x2, y2))]
         powers = []
         healths = []
+
+        ai_turn = True
 
         # Loop over each type of entity
         for row in range(self.row_count):
@@ -194,9 +255,8 @@ class Terrain:
                     healths.append((troop.health, (row, col)))
 
                     #Update UnitMoveChannel to show which unit to move
-                    if not troop_chosen and troop.player_id == player.id and troop.moves > 0:
-                        observation[row, col, CnnChannels.UNIT_TO_MOVE.value] = 1
-                        troop_chosen = troop
+                    if troop.player_id == player.id and troop.moves > 0:
+                        ai_turn = False
                         #mark reachable positions
                         observation[:, :, CnnChannels.CAN_MOVE.value] = self.get_reachable_pos(troop)
 
@@ -208,27 +268,66 @@ class Terrain:
             observation[row, col, CnnChannels.POWER.value] = power/max_power
         for health, (row, col) in healths:
             observation[row, col, CnnChannels.HEALTH.value] = health/max_health
-        return observation, troop_chosen
+
+        #I AM LAZY, NEEDT TO CHANGE CODE BUT LET'S SEE IF THIS EVEN WORKS
+        # Reorder dimensions to (Channels, Rows, Columns)
+        observation = np.transpose(observation, (2, 0, 1))
+
+        return observation, ai_turn
     
-    def action(self, action, troop):
-        # Move the troop to the new tile and clear the old tile
+    #NEED TO FIND ONE ACTION FROM ACTION SPACE
+    #returns reward and termianted
+    def action(self, actions, player):
+        reward = Rewards.DEFAULT.value
+        terminated = False
+        troops = player.troops
 
-        new_row, new_col = action
-        reward = 0
-        #ATTACK NOT WORKING FOR BUILDINGS YET
-        tile_troop = self.tiles[new_row, new_col].troop
-        tile_building = self.tiles[new_row, new_col].building
-        if tile_troop is None and tile_building is None:
-            reward = self._move(action, troop)
-        elif tile_troop and tile_troop.row==troop.row and tile_troop.col==troop.col:
+        #first check if there even is a troop
+        if len(troops) == 0:
+            #because no troops, the game is basically lost
+            return Rewards.LOSE_CITY.value, True
+        print(actions)
+        #get a random action from the space
+        actions = np.where(actions == 1)[0]  # get indices of valid actions
+        print(actions)
+        for action in actions:
+            print(divmod(action, self.row_count))
+        #if no valid actions
+
+        if len(actions) == 0:
+            print("No actions")
+            return Rewards.DEFAULT.value, terminated
+        action = np.random.choice(actions) 
+        target_row, target_col = divmod(action, self.row_count)  #get row and col coordinates
+
+        #model doesn't specify which troop to use so I just find the closest troop
+        troop = self.get_nearest_troop(target_row, target_col, troops)   
+        target_troop = self.tiles[target_row, target_col].troop
+        target_building = self.tiles[target_row, target_col].building
+
+        #just move
+        if target_troop is None and target_building is None:
+            reward = self._move(target_row, target_col, troop)
+        #fortify if the tile it is standing on
+        elif target_row == troop.row and target_row == troop.col:
             reward = self._fortify(troop)
-        #attacking check if the distance is bigger than 1, if yes then first move to the target, then attack
-        elif tile_troop:
-            reward = self._attack_troop(action, troop)
-        elif tile_building:
-            reward = self._attack_building(action, troop)
+        else:
+            #check if troop is already adjacent
+            target_directions = DIRECTIONS_EVEN if target_row % 2 == 0 else DIRECTIONS_ODD
+            adjacent_cells = [(target_row + dx, target_col + dy) for dx, dy in target_directions
+                        if 0 <= target_row + dx < self.row_count and 0 <= target_col + dy < self.column_count]
+            if (troop.row, troop.col) not in adjacent_cells:
+                #move adjacent to target
+                row, col = self.find_closest_adjacent_tile(target_row, target_col, troop)
+                if row is None or col is None:
+                    print("Couldn't find adjacent tile")
+                else:
+                    reward = self._move(row, col, troop)
 
-        return reward
+            #then attack
+            reward = self._attack(action, troop, target_building or target_troop)
+
+        return reward, terminated
 
     def draw(self, window):
         for row in self.tiles:
@@ -237,86 +336,54 @@ class Terrain:
        
     def _fortify(self, troop):
         troop.moves = 0
+        #increase the power of the troop while fortified
+
         reward = Rewards.DEFAULT.value
         return reward
-    def _move(self, action, troop):
+    
+
+    def _move(self, new_row, new_col, troop):
         #don't set the moves to zero, instead minus the moves made by the player so he can move and attack
         troop.moves = 0
 
-        new_row, new_col = action
         self.tiles[troop.row][troop.col].troop = None
         self.tiles[new_row][new_col].troop = troop
         troop.row = new_row
         troop.col = new_col
         
-        
         reward = Rewards.DEFAULT.value
         return reward
 
-    def _attack_troop(self, action, attacker):
+    def _attack(self, new_row, new_col, attacker, defender):
         attacker.moves = 0
-        row, col = action
         #get the defending and attacking troops power
-        defender = self.tiles[row, col].troop
         def_power = defender.power
-
         attack_power = attacker.power
+
         #formula: Damage(HP)=30*e^{0.04*StrengthDifference}*randomBetween(0.8-1.2)}
         rand = random.uniform(0.8, 1.2)
         damage_to_defender = 30*math.exp(0.04 * (attack_power-def_power)) * rand
         damage_to_attacker = 30*math.exp(0.04 * (def_power-attack_power)) * rand
-
         defender.health -= damage_to_defender
         attacker.health -= damage_to_attacker
-        print(f"Attacking troop at {row}, {col}, damage dealt: {damage_to_defender}, damage received: {damage_to_attacker}")
+        print(f"Attacking troop at {new_row}, {new_col}, damage dealt: {damage_to_defender}, damage received: {damage_to_attacker}")
 
-        #NEED A CONDITION WHERE BOTH UNITS CAN'T DIE, PROBABLY THE UNIT THAT HAS HIGHER HEALTH THAN THE OTHER ONE STAYS ALIVE
         reward = Rewards.ATTACK.value
 
-        if defender.health <= 0:
-            self._kill_troop(defender)
-            reward = Rewards.KILL_TROOP.value
-        elif attacker.health <= 0:
-            self._kill_troop(attacker)
-            reward = Rewards.LOSE_TROOP.value
+        if defender.health <= 0 or attacker.health <= 0:
+            #kill the unit with the least health, otherwise just the one with less than 1 health
+            unit_to_kill = min((defender, attacker), key=lambda troop: troop.health) \
+                                if defender.health <= 0 and attacker.health <= 0 else defender if defender.health <= 0 else attacker
+            reward = self._kill_entity(unit_to_kill)
+
         return reward
-    
-    def _attack_building(self, action, attacker):
-        attacker.moves = 0
-        row, col = action
-        #get the defending and attacking troops power
-        defender = self.tiles[row, col].building
-        def_power = defender.power
 
-        attack_power = attacker.power
-        #formula: Damage(HP)=30*e^{0.04*StrengthDifference}*randomBetween(0.8-1.2)}
-        rand = random.uniform(0.8, 1.2)
-        damage_to_defender = 30*math.exp(0.04 * (attack_power-def_power)) * rand
-        damage_to_attacker = 30*math.exp(0.04 * (def_power-attack_power)) * rand
-
-        defender.health -= damage_to_defender
-        attacker.health -= damage_to_attacker
-        print(f"Attacking city at {row}, {col}, damage dealt: {damage_to_defender}, damage received: {damage_to_attacker}")
-
-        #NEED A CONDITION WHERE BOTH UNITS CAN'T DIE, PROBABLY THE UNIT THAT HAS HIGHER HEALTH THAN THE OTHER ONE STAYS ALIVE
-        reward = Rewards.ATTACK.value
-
-        if defender.health <= 0:
-            self._kill_city(defender)
+    def _kill_entity(self, row, col, entity):
+        if isinstance(entity, Troop):
+            self.tiles[row, col].troop = None
+            reward = Rewards.KILL_TROOP.value
+        elif isinstance(entity, Building):
+            self.tiles[row, col].building = None
             reward = Rewards.KILL_CITY.value
-        elif attacker.health <= 0:
-            self._kill_troop(attacker)
-            reward = Rewards.KILL_TROOP.value
         return reward
-        
-
-        #have to check what reward to return, because I don't know if my troops are being attacked or enemies :)
-        #So don't know + reward for attacking or - reward for being attacked
-
-    def _kill_troop(self, troop):
-        self.tiles[troop.row, troop.col].troop = None
-    def _kill_city(self, troop):
-        self.tiles[troop.row, troop.col].troop = None
-
-
 

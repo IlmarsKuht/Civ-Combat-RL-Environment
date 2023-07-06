@@ -35,3 +35,24 @@ I want to already mask what is possible and what is not (not allow to make inval
 
 no masking ,just return a large negative reward if invalid action 
 
+
+I will have discrete grid and then mask it, then choose a random action from all available actions left
+Stable basline has Maskable PPO!!!!!!!
+
+Don't care about the AI for now and his actions, just focus on the player and him doing the right actions
+
+RIGHT NOW IMPLEMENT A MASK!!!!! it should be implemented in the environment as a helper function or something
+
+How do I know for which troop should I make the mask?
+
+I need to move the closest troop that is to the position that the AI wants to move to.
+
+a lot of the functions should be made private because they are not meant to be called externally, i guess.
+
+Need a fortify defense bonus
+
+City centers also should be able to attack
+
+Diminish damage for damage units
+
+MAKE MY OWN CNN WITH MASK
