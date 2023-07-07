@@ -7,10 +7,9 @@ import numpy as np
 import random
 
 from entities import Terrain, Troop, Building, Player
-from options import BuildingType, TroopType, TileType, CnnChannels
+from options import BuildingType, TroopType, TileType, CnnChannels, ROWS, COLUMNS
 
 #pygame grid
-COLUMNS, ROWS = 20, 20
 HEX_SIZE = 60
 MARGIN = 70
 
@@ -36,15 +35,13 @@ class Civ6CombatEnv(gym.Env):
         self.clock = None
 
         #FIGURE OUT WHAT ACTION SPACES TO USE
-        self.action_space = gym.spaces.MultiBinary(ROWS*COLUMNS)
+        self.action_space = gym.spaces.MultiBinary(ROWS*COLUMNS,)
         
         #Setting up observation space
-        self.observation_space = gym.spaces.Box(
-            low=-1, 
-            high=1,  
-            shape=(len(CnnChannels), COLUMNS, ROWS), 
-            dtype=np.float32 
-        )
+        self.observation_space = gym.spaces.Dict({
+            'observation': gym.spaces.Box(low=-1, high=1, shape=(len(CnnChannels), COLUMNS, ROWS), dtype=np.float32),
+            'mask': gym.spaces.Box(low=0, high=1, shape=(ROWS*COLUMNS,), dtype=np.uint8)
+        })
         
         #check if render_mode is valid
         assert render_mode is None or render_mode in self.metadata["render_modes"], f"Invalid render mode, available render modes are {self.metadata['render_modes']}"
@@ -54,8 +51,10 @@ class Civ6CombatEnv(gym.Env):
     def _get_obs(self):
         observation, ai_turn = self.terrain.get_obs(self.player)
         self.ai_turn = ai_turn
-        #IF UNIT CHOSEN IS FALSE THEN THE AI SHOULD NOW MOVE 
-        return observation
+        #get mask
+        mask = self.valid_action_mask(self.player)
+        
+        return {'observation': observation, 'mask': mask}
     
     def _get_info(self):
         #additional information not returned as observation
@@ -92,7 +91,6 @@ class Civ6CombatEnv(gym.Env):
         #     if self.render_mode == "human":
         #         self._render_frame()
 
-
         return observation, reward, terminated, truncated, info
 
     def reset(self, seed=None, options=None):
@@ -126,15 +124,21 @@ class Civ6CombatEnv(gym.Env):
 
         return observation, info
     
-    def valid_action_mask(self):
+    def valid_action_mask(self, player):
         # Initialize global mask to all -1s
         global_mask = np.zeros((self.terrain.row_count, self.terrain.column_count))
 
-        for troop in self.player.troops:
+        for troop in player.troops:
             troop_mask = self.terrain.get_reachable_pos(troop)
             # Propagate 1s to global mask
             global_mask[troop_mask == 1] = 1
+
         return global_mask.flatten()
+    
+    def close(self):
+        if self.window is not None:
+            pygame.display.quit()
+            pygame.quit()
 
     
     def _render_frame(self):
@@ -153,11 +157,6 @@ class Civ6CombatEnv(gym.Env):
         pygame.display.update()  
         self.clock.tick(self.metadata["render_fps"])
         
-
-    def close(self):
-        if self.window is not None:
-            pygame.display.quit()
-            pygame.quit()
     
     def _create_troop(self, player : Player, health, power, moves, max_moves, type : TroopType, row, col):
         self.terrain[row][col].troop = Troop(health, power, moves, max_moves, player.id, type, row, col)

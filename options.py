@@ -36,4 +36,6 @@ class Rewards(Enum):
 DIRECTIONS_ODD = [(-1, 0), (-1, 1), (0, 1), (1, 1), (1, 0), (0, -1)]
 DIRECTIONS_EVEN = [(-1, -1), (-1, 0), (0, 1), (1, 0), (1, -1), (0, -1)]
 
+ROWS = 10
+COLUMNS = 10
     

@@ -56,3 +56,10 @@ City centers also should be able to attack
 Diminish damage for damage units
 
 MAKE MY OWN CNN WITH MASK
+
+Check reward scale so that they are similar to discount rate?
+
+
+
+
+New blabla mask does not match the size of actual tensor, try to figure it out
