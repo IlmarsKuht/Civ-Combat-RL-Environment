@@ -62,4 +62,19 @@ Check reward scale so that they are similar to discount rate?
 
 
 
-New blabla mask does not match the size of actual tensor, try to figure it out
+Check if masking is working correctly and the network returns the correct outputs
+The network returns 100 probabilites and I should mask the invalid ones and choose the 
+one with the highest probability
+
+To be honest I have not the slighest Idea how my CNN works, so later I need to work on 
+it a little more to understand and change because it is shit and barely working
+Make it cleaner
+
+When I call check env it provides I guess all invalid moves unlike the CNN provides something
+so I need to fix when all moves are invalid
+
+WE CAN DO INVALID ACTION MASKING LATER, JUST GIVE A NEGATIVE REWARD
+
+Fortify doesn't work correctly, he still attack himself
+
+Write condition if city lost or troop lost or game time ended then terminate (it also should be a win condition)

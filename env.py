@@ -1,20 +1,16 @@
 import pygame
-
 import gymnasium as gym
-
 import numpy as np
-
-import random
 
 from entities import Terrain, Troop, Building, Player
 from options import BuildingType, TroopType, TileType, CnnChannels, ROWS, COLUMNS
 
 #pygame grid
-HEX_SIZE = 60
+HEX_SIZE = 30
 MARGIN = 70
 
 #pygame window
-WIDTH, HEIGHT = 800, 700
+WIDTH, HEIGHT = 1200, 1000
 
 #might break if rows and columns are not even or might not, who knows :)
 
@@ -22,26 +18,24 @@ class Civ6CombatEnv(gym.Env):
     """Custom Environment that follows gym interface."""
 
     #layer can try rgb_array rendering for CNNs.
-    metadata = {"render_modes": ["human"], "render_fps": 2}
+    metadata = {"render_modes": ["human"], "render_fps": 10}
 
     def __init__(self, render_mode=None):
         super().__init__()
 
         #Game variables
         self.ai_turn = False
+        self.player_mask = None
 
         #pygame variables
         self.window = None
         self.clock = None
 
         #FIGURE OUT WHAT ACTION SPACES TO USE
-        self.action_space = gym.spaces.MultiBinary(ROWS*COLUMNS,)
+        self.action_space = gym.spaces.Box(low=0, high=1, shape=(ROWS*COLUMNS,))
         
         #Setting up observation space
-        self.observation_space = gym.spaces.Dict({
-            'observation': gym.spaces.Box(low=-1, high=1, shape=(len(CnnChannels), COLUMNS, ROWS), dtype=np.float32),
-            'mask': gym.spaces.Box(low=0, high=1, shape=(ROWS*COLUMNS,), dtype=np.uint8)
-        })
+        self.observation_space = gym.spaces.Box(low=-1, high=1, shape=(len(CnnChannels), COLUMNS, ROWS), dtype=np.float32)
         
         #check if render_mode is valid
         assert render_mode is None or render_mode in self.metadata["render_modes"], f"Invalid render mode, available render modes are {self.metadata['render_modes']}"
@@ -51,10 +45,12 @@ class Civ6CombatEnv(gym.Env):
     def _get_obs(self):
         observation, ai_turn = self.terrain.get_obs(self.player)
         self.ai_turn = ai_turn
-        #get mask
-        mask = self.valid_action_mask(self.player)
         
-        return {'observation': observation, 'mask': mask}
+        #Keep the mask for valid actions later
+        self.player_mask = observation[CnnChannels.CAN_MOVE.value, :, :]
+        self.player_mask = np.where(self.player_mask == -1, 0, self.player_mask).astype(dtype=np.uint8).flatten()
+
+        return observation
     
     def _get_info(self):
         #additional information not returned as observation
@@ -62,7 +58,7 @@ class Civ6CombatEnv(gym.Env):
 
     def step(self, action):
         #do the action
-        reward, terminated = self.terrain.action(action, self.player)
+        reward, terminated = self.terrain.action(action, self.player, self.player_mask)
         self._clean_up(self.player)
         self._clean_up(self.bot)
         #check what to do with truncated
@@ -76,20 +72,20 @@ class Civ6CombatEnv(gym.Env):
             self._render_frame()
 
         #do AI move and render again
-        # if self.ai_turn:
-        #     action, troop = self._rand_action(self.bot)
-        #     if action is not None and troop is not None:
-        #         reward -= self.terrain.action(action, troop)
+        if self.ai_turn:
+            #action, troop = self._rand_action(self.bot)
+            # if action is not None and troop is not None:
+            #     reward -= self.terrain.action(action, troop)
 
-        #     self._reset_moves(self.player)
-        #     self._reset_moves(self.bot)
-        #     self._clean_up(self.player)
-        #     self._clean_up(self.bot)
-        #     observation = self._get_obs()
-        #     info = self._get_info()
+            self._reset_moves(self.player)
+            self._reset_moves(self.bot)
+            # self._clean_up(self.player)
+            # self._clean_up(self.bot)
+            observation = self._get_obs()
+            info = self._get_info()
 
-        #     if self.render_mode == "human":
-        #         self._render_frame()
+            if self.render_mode == "human":
+                self._render_frame()
 
         return observation, reward, terminated, truncated, info
 
@@ -123,17 +119,6 @@ class Civ6CombatEnv(gym.Env):
             self._render_frame()
 
         return observation, info
-    
-    def valid_action_mask(self, player):
-        # Initialize global mask to all -1s
-        global_mask = np.zeros((self.terrain.row_count, self.terrain.column_count))
-
-        for troop in player.troops:
-            troop_mask = self.terrain.get_reachable_pos(troop)
-            # Propagate 1s to global mask
-            global_mask[troop_mask == 1] = 1
-
-        return global_mask.flatten()
     
     def close(self):
         if self.window is not None:

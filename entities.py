@@ -258,7 +258,14 @@ class Terrain:
                     if troop.player_id == player.id and troop.moves > 0:
                         ai_turn = False
                         #mark reachable positions
-                        observation[:, :, CnnChannels.CAN_MOVE.value] = self.get_reachable_pos(troop)
+                        new_values = self.get_reachable_pos(troop)
+                        current_values = observation[:, :, CnnChannels.CAN_MOVE.value]
+
+                        # Only update current_values where it's -1 and new_values is either 0 or 1
+                        # or where current_values is 0 and new_values is 1
+                        mask = ((current_values == -1) & ((new_values == 1) | (new_values == 0))) | ((current_values == 0) & (new_values == 1))
+                        current_values[mask] = new_values[mask]
+                        observation[:, :, CnnChannels.CAN_MOVE.value] = current_values
 
 
         #normalize power and health between 0 and 1
@@ -275,30 +282,24 @@ class Terrain:
 
         return observation, ai_turn
     
-    #NEED TO FIND ONE ACTION FROM ACTION SPACE
-    #returns reward and termianted
-    def action(self, actions, player):
+    def draw(self, window):
+        for row in self.tiles:
+            for tile in row:
+                tile.draw(window)
+
+    def action(self, actions, player, mask):
         reward = Rewards.DEFAULT.value
         terminated = False
         troops = player.troops
 
         #first check if there even is a troop
-        if len(troops) == 0:
+        if len(troops) == 0 or len(player.buildings) == 0:
             #because no troops, the game is basically lost
             return Rewards.LOSE_CITY.value, True
-        print(actions)
-        #get a random action from the space
-        actions = np.where(actions == 1)[0]  # get indices of valid actions
-        print(actions)
-        for action in actions:
-            print(divmod(action, self.row_count))
-        #if no valid actions
 
-        if len(actions) == 0:
-            print("No actions")
-            return Rewards.DEFAULT.value, terminated
-        action = np.random.choice(actions) 
-        target_row, target_col = divmod(action, self.row_count)  #get row and col coordinates
+        target_row, target_col = self._get_action(actions, mask)
+        if target_row is None:
+            return Rewards.INVALID.value, False
 
         #model doesn't specify which troop to use so I just find the closest troop
         troop = self.get_nearest_troop(target_row, target_col, troops)   
@@ -308,36 +309,50 @@ class Terrain:
         #just move
         if target_troop is None and target_building is None:
             reward = self._move(target_row, target_col, troop)
+
         #fortify if the tile it is standing on
-        elif target_row == troop.row and target_row == troop.col:
+        elif target_row == troop.row and target_col == troop.col:
             reward = self._fortify(troop)
+
+        #move and attack 
         else:
-            #check if troop is already adjacent
-            target_directions = DIRECTIONS_EVEN if target_row % 2 == 0 else DIRECTIONS_ODD
-            adjacent_cells = [(target_row + dx, target_col + dy) for dx, dy in target_directions
-                        if 0 <= target_row + dx < self.row_count and 0 <= target_col + dy < self.column_count]
-            if (troop.row, troop.col) not in adjacent_cells:
+            if not self._is_adjacent(troop.row, troop.col, target_row, target_col):
                 #move adjacent to target
                 row, col = self.find_closest_adjacent_tile(target_row, target_col, troop)
-                if row is None or col is None:
-                    print("Couldn't find adjacent tile")
-                else:
-                    reward = self._move(row, col, troop)
-
+                #no reward because already attacking
+                self._move(row, col, troop)
             #then attack
-            reward = self._attack(action, troop, target_building or target_troop)
+            if target_building:
+                reward = self._attack(target_row, target_col, troop, target_building)
+            elif target_troop:
+                reward = self._attack(target_row, target_col, troop, target_troop)
 
         return reward, terminated
+    
+    def _is_adjacent(self, row, col, target_row, target_col):
+        target_directions = DIRECTIONS_EVEN if target_row % 2 == 0 else DIRECTIONS_ODD
+        adjacent_cells = [(target_row + dx, target_col + dy) for dx, dy in target_directions
+                    if 0 <= target_row + dx < self.row_count and 0 <= target_col + dy < self.column_count]
+        return (row, col) in adjacent_cells
+    
+    def _get_action(self, actions, mask):
+        #mask invalid actions
+        actions = actions*mask
+        actions = np.where(actions != 0)[0]  # get indices of valid actions
+        #if no valid actions
+        if len(actions) == 0:
+            print("No actions")
+            return None, None
+        #else get a random action
+        action = np.random.choice(actions) 
+        target_row, target_col = divmod(action, self.row_count)  #get row and col coordinates
 
-    def draw(self, window):
-        for row in self.tiles:
-            for tile in row:
-                tile.draw(window)
+        return target_row, target_col
+
        
     def _fortify(self, troop):
         troop.moves = 0
         #increase the power of the troop while fortified
-
         reward = Rewards.DEFAULT.value
         return reward
     
@@ -378,12 +393,12 @@ class Terrain:
 
         return reward
 
-    def _kill_entity(self, row, col, entity):
+    def _kill_entity(self, entity):
         if isinstance(entity, Troop):
-            self.tiles[row, col].troop = None
+            self.tiles[entity.row, entity.col].troop = None
             reward = Rewards.KILL_TROOP.value
         elif isinstance(entity, Building):
-            self.tiles[row, col].building = None
+            self.tiles[entity.row, entity.col].building = None
             reward = Rewards.KILL_CITY.value
         return reward
 
