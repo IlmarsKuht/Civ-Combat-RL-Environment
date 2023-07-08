@@ -1,80 +1,30 @@
-Let's try observation space like this now:
-Use CNN with PPO!
-NxN matrices for each feature
+HIGH PRIORITY:
+Check reward scaling and discount rate (said they should be similar or smth)
 
-Give minus reward for a bad move
-
-
-What features to choose (NxN feature maps):
-    1) isEnemyBuilding
-    3) isEnemyTroop
-    2) Health
-    3) Power
-    4) canMove
-    5) Unit to move
+Let players make their own moves (ACTUALLY WOULD BE VERY GOOD FOR DEBUGGING)
 
 
-
-
-POWER IS DECREASED FOR MISSING HEALTH AND THERE ARE OTHER DEBUFFS..
-MAKE VARIABLES WITH DEBUFFS AND WHEN THEY DISAPPEAR
-Do I have to make the human be able to make moves?
-
-When attacking the player can only move there if the unit is killed, otherwise stay in the same place 
-Also if attacking from 2 tiles we should move the player one tile closer and only then attack, might be a little difficult to make
-Or just w
-
-Finish the game when all the troops die? sure
-
-If you stay in the same place, remove all movement.
-Otherwise remove movement however much you moved.
-
-AI just walked through the city, get_reachable_pos doesn't work correctly
-
-I want to already mask what is possible and what is not (not allow to make invalid moves)
-
-no masking ,just return a large negative reward if invalid action 
-
-
-I will have discrete grid and then mask it, then choose a random action from all available actions left
-Stable basline has Maskable PPO!!!!!!!
-
-Don't care about the AI for now and his actions, just focus on the player and him doing the right actions
-
-RIGHT NOW IMPLEMENT A MASK!!!!! it should be implemented in the environment as a helper function or something
-
-How do I know for which troop should I make the mask?
-
-I need to move the closest troop that is to the position that the AI wants to move to.
-
-a lot of the functions should be made private because they are not meant to be called externally, i guess.
-
-Need a fortify defense bonus
-
+MEDIUM PRIORITY:
+Different Terrain
+Terrain, Health, combat etc. buffs and DEBUFFS
+a lot of the functions should be made private.
 City centers also should be able to attack
+Modify the grid search functions, try to combine them?
+Probably move the render functions somewhere else?
+Make troop and building have the same parent class (x, y, health ,power) etc.. and then inherit
+add healing when fortified and maybe a reward for healing? How to encourage AI to heal, he might not find how to do it
+Group damage bonus
+Just go through the wiki and add everything about combat 
+Add unit training
+If I add more cities, I need to change so my game doesn't stop when a city is destroyed
 
-Diminish damage for damage units
+What debuffs do cities suffer from
 
-MAKE MY OWN CNN WITH MASK
 
-Check reward scale so that they are similar to discount rate?
-
+LOW PRIORITY:
 
 
 
-Check if masking is working correctly and the network returns the correct outputs
-The network returns 100 probabilites and I should mask the invalid ones and choose the 
-one with the highest probability
+Remove movement however much you moved. (NON-priority because useless since AI can see the entire map)
 
-To be honest I have not the slighest Idea how my CNN works, so later I need to work on 
-it a little more to understand and change because it is shit and barely working
-Make it cleaner
-
-When I call check env it provides I guess all invalid moves unlike the CNN provides something
-so I need to fix when all moves are invalid
-
-WE CAN DO INVALID ACTION MASKING LATER, JUST GIVE A NEGATIVE REWARD
-
-Fortify doesn't work correctly, he still attack himself
-
-Write condition if city lost or troop lost or game time ended then terminate (it also should be a win condition)
+Why Box obs doesn't accept some shapes? (I guess doesn't except not perfect square)

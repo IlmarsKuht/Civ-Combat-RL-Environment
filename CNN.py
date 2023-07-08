@@ -10,7 +10,7 @@ from typing import Callable, Dict, List, Optional, Tuple
 import numpy as np
 
 class CustomCNN(BaseFeaturesExtractor):
-    def __init__(self, observation_space: spaces.Dict):
+    def __init__(self, observation_space):
         # Compute shape by doing one forward pass with a sample observation
         with torch.no_grad():
             cnn_test = nn.Sequential(
