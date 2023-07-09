@@ -21,9 +21,9 @@ def main():
             net_arch=dict(pi=[128, 128], vf=[128, 128])
         )
         model = PPO("CnnPolicy", env, ent_coef=0.001, verbose=True, use_sde=True, tensorboard_log='./logs', policy_kwargs=policy_kwargs)
-    model.learn(total_timesteps=1000000, progress_bar=True)
+    model.learn(total_timesteps=4000, progress_bar=True)
     model.save("./models/civ6_model")
-    #check_env(env)
+    check_env(env)
     env = Civ6CombatEnv(max_steps=100, render_mode="human")
     policy_kwargs = dict(
             features_extractor_class=CustomCNN,

@@ -334,7 +334,7 @@ class Terrain:
         #get troops with moves
         troops = [troop for troop in troops if troop.moves > 0]
         #chooses a random move if model didn't have a move
-        target_row, target_col, no_model_action, debug = self._get_action(actions, mask)
+        target_row, target_col, no_model_action= self._get_action(actions, mask)
        
 
         #model doesn't specify which troop to use so I just find the closest troop
@@ -371,10 +371,9 @@ class Terrain:
 
         #give bad reward and choose
         if no_model_action:
-            print("INVALID")
             reward = Rewards.INVALID.value
 
-        return reward, terminated, ai_turn, debug
+        return reward, terminated, ai_turn
 
     
     def _movable_troops(self, troops):
@@ -399,9 +398,7 @@ class Terrain:
         valid_indices = np.where(actions != 0)[0]
 
         # If no valid actions.
-        debug = False
         if len(valid_indices) == 0:
-            debug = True
             valid_indices = np.where(mask == 1)[0]
             no_model_action = True
         # Get values of valid actions.
@@ -415,7 +412,7 @@ class Terrain:
 
         # Get row and col coordinates.
         target_row, target_col = divmod(action, self.row_count) 
-        return target_row, target_col, no_model_action, debug
+        return target_row, target_col, no_model_action
        
     def _fortify(self, troop):
         #Fortification bonus calculations
@@ -519,4 +516,3 @@ class Terrain:
             reward = Rewards.KILL_CITY.value
             terminated = True
         return reward, terminated
-

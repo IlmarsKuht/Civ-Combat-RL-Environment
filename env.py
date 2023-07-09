@@ -22,7 +22,7 @@ class Civ6CombatEnv(gym.Env):
     """Custom Environment that follows gym interface."""
 
     #layer can try rgb_array rendering for CNNs.
-    metadata = {"render_modes": ["human"], "render_fps": 1}
+    metadata = {"render_modes": ["human"], "render_fps": 5}
 
     def __init__(self, max_steps=100, render_mode=None):
         super().__init__()
@@ -62,14 +62,14 @@ class Civ6CombatEnv(gym.Env):
 
     def step(self, action):
         #do the action
-        reward, terminated, ai_turn, debug = self.terrain.action(action, self.player, self.player_mask)
+        reward, terminated, ai_turn = self.terrain.action(action, self.player, self.player_mask)
         self._clean_up(self.player)
         self._clean_up(self.bot)
         
 
         #get the observations and additonal info
 
-        if self.render_mode == "human" or debug:
+        if self.render_mode == "human":
             self._render_frame()
 
         #do AI move and render again
@@ -156,7 +156,7 @@ class Civ6CombatEnv(gym.Env):
         if troop_amount > 0:
             positions = self._get_troop_positions(row, col, troop_amount)
             for troop_row, troop_col in positions:
-                self._create_troop(player, 100, 100, 50, 2, 2, TroopType.WARRIOR, troop_row, troop_col)
+                self._create_troop(player, 100, 100, 55, 2, 2, TroopType.WARRIOR, troop_row, troop_col)
 
     def close(self):
         if self.window is not None:
@@ -249,7 +249,6 @@ class Civ6CombatEnv(gym.Env):
         for troop in player.troops:
             if troop.health <= 0:
                 player.troops.remove(troop)
-
 
 
 

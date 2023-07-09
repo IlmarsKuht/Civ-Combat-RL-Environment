@@ -1,13 +1,11 @@
 HIGH PRIORITY:
-STILL A LOT OF INVALID ACTIONS, WHYYYYYYY (set grid to 10x10 to check maybe and recheck observations)
+
 REMOVE LOGS FROM GITHUB
 Give them a little more power, they barely killing the city
-CHECK IF ALL OF THE CHANNELS ARE CORRECT, ESPECIALLY CAN_MOVE, MASK WAS VERY WEIRD AND ONLY HAD 1 MOVE FOR A LONG TIME
 ASK CHATGPT HOW TO GET RID OF ALL THE IF STATEMENTS AND IMPROVE MY CODE AND COMBINE MY CODE
 COMBINE THE THREE GRID SEARCH FUNCTIONS OR MAKE THEM EASEIR, THEY ARE STUPIDLY COMPLEX AND REPETITIVE
-Do some rendering so that we can know a troop is in the building
-at the very start mask is all 0s, why?
-Check reward scaling and discount rate (said they should be similar or smth)
+
+Health power between buildings and troops should still be propoprtional, else how does the AI know the power of things
 
 Let players make their own moves (ACTUALLY WOULD BE VERY GOOD FOR DEBUGGING)
 
@@ -41,9 +39,3 @@ Remove movement however much you moved. (NON-priority because useless since AI c
 
 Why Box obs doesn't accept some shapes? (I guess doesn't except not perfect square)
 
-
-When is a tile not reachable
-
-1) obstacle
-2) any Troop
-3) Enemy buildings
