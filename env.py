@@ -22,7 +22,7 @@ class Civ6CombatEnv(gym.Env):
     """Custom Environment that follows gym interface."""
 
     #layer can try rgb_array rendering for CNNs.
-    metadata = {"render_modes": ["human"], "render_fps": 10}
+    metadata = {"render_modes": ["human"], "render_fps": 1}
 
     def __init__(self, max_steps=100, render_mode=None):
         super().__init__()
@@ -62,14 +62,14 @@ class Civ6CombatEnv(gym.Env):
 
     def step(self, action):
         #do the action
-        reward, terminated, ai_turn = self.terrain.action(action, self.player, self.player_mask)
+        reward, terminated, ai_turn, debug = self.terrain.action(action, self.player, self.player_mask)
         self._clean_up(self.player)
         self._clean_up(self.bot)
         
 
         #get the observations and additonal info
 
-        if self.render_mode == "human":
+        if self.render_mode == "human" or debug:
             self._render_frame()
 
         #do AI move and render again
