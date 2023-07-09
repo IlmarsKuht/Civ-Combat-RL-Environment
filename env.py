@@ -22,7 +22,7 @@ class Civ6CombatEnv(gym.Env):
     """Custom Environment that follows gym interface."""
 
     #layer can try rgb_array rendering for CNNs.
-    metadata = {"render_modes": ["human"], "render_fps": 4}
+    metadata = {"render_modes": ["human"], "render_fps": 10}
 
     def __init__(self, max_steps=100, render_mode=None):
         super().__init__()

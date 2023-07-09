@@ -20,9 +20,11 @@ class CnnChannels(Enum):
     # 1 is True | 0 is False | -1 is no value
     IS_ENEMY_BUILDING = 0
     IS_ENEMY_TROOP = 1
-    HEALTH = 2
-    POWER = 3
-    CAN_MOVE = 4
+    TROOP_HEALTH = 2
+    TROOP_POWER = 3
+    BUILDING_HEALTH = 4
+    BUILDING_POWER = 5
+    CAN_MOVE = 6
 
 class Rewards(Enum):
     KILL_TROOP = 1
@@ -36,7 +38,7 @@ class Rewards(Enum):
 DIRECTIONS_ODD = [(-1, 0), (-1, 1), (0, 1), (1, 1), (1, 0), (0, -1)]
 DIRECTIONS_EVEN = [(-1, -1), (-1, 0), (0, 1), (1, 0), (1, -1), (0, -1)]
 
-ROWS, COLUMNS = 10,10
+ROWS, COLUMNS = 6, 6
 
 HEX_SIZE = 100
 

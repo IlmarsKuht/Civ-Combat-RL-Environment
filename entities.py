@@ -167,6 +167,10 @@ class Terrain:
             # Not reachable
             if movement_left < 0 or self.tiles[curr_x, curr_y].obstacle:
                 continue
+            elif (curr_x != troop.row or curr_y != troop.col) \
+                and (self.tiles[curr_x, curr_y].troop or \
+                (self.tiles[curr_x, curr_y].building and self.tiles[curr_x, curr_y].building.player_id != troop.player_id)):
+                continue
             # Reached adjacent cell to target
             if (curr_x, curr_y) in adjacent_cells:
                 target_row, target_col = curr_x, curr_y
@@ -200,6 +204,10 @@ class Terrain:
                         min_moves = moves
                         nearest_troop = troop
                     break
+                # Can't move to here, don't look
+                elif (curr_x != troop.row or curr_y != troop.col) and (self.tiles[curr_x, curr_y].troop or \
+                    (self.tiles[curr_x, curr_y].building and self.tiles[curr_x, curr_y].building.player_id != troop.player_id)):
+                    continue
 
                 directions = DIRECTIONS_EVEN if curr_x % 2 == 0 else DIRECTIONS_ODD
                 for dx, dy in directions:
@@ -224,8 +232,7 @@ class Terrain:
             tile_troop = self.tiles[curr_x, curr_y].troop
             tile_building = self.tiles[curr_x, curr_y].building
             if (curr_x != troop.row or curr_y != troop.col) \
-            and ((tile_troop and tile_troop.player_id == troop.player_id) \
-            or (tile_building and tile_building.player_id == troop.player_id)):
+            and (tile_troop and tile_troop.player_id == troop.player_id):
                 observation[curr_x, curr_y] = 0
                 continue
             elif (tile_troop and tile_troop.player_id != troop.player_id) \
@@ -250,8 +257,10 @@ class Terrain:
 
         #Keep track of them, I need to normalize them afterwards
         #Format [(value, (x, y)), (value2, (x2, y2))]
-        powers = []
-        healths = []
+        troop_powers = []
+        troop_healths = []
+        building_powers = []
+        building_healths = []
 
         # Loop over each type of entity
         for row in range(self.row_count):
@@ -263,14 +272,14 @@ class Terrain:
                 #Update Friendly, Enemy, Health and Power channels for buildings
                 if building:
                     observation[row, col, CnnChannels.IS_ENEMY_BUILDING.value] = building.player_id != player.id
-                    powers.append((building.power, (row, col)))
-                    healths.append((building.health, (row, col)))
+                    building_powers.append((building.power, (row, col)))
+                    building_healths.append((building.health, (row, col)))
 
                 #Update Friendly, Enemy, Health and Power channels for troops
                 if troop:
                     observation[row, col, CnnChannels.IS_ENEMY_TROOP.value] = troop.player_id != player.id
-                    powers.append((troop.power, (row, col)))
-                    healths.append((troop.health, (row, col)))
+                    troop_powers.append((troop.power, (row, col)))
+                    troop_healths.append((troop.health, (row, col)))
 
                     #Update UnitMoveChannel to show which unit to move
                     if troop.player_id == player.id and troop.moves > 0:
@@ -286,12 +295,18 @@ class Terrain:
 
 
         #normalize power and health between 0 and 1
-        max_power = max(power for power, _ in powers)
-        max_health = max(health for health, _ in healths)
-        for power, (row, col) in powers:
-            observation[row, col, CnnChannels.POWER.value] = power/max_power
-        for health, (row, col) in healths:
-            observation[row, col, CnnChannels.HEALTH.value] = health/max_health
+        max_troop_power = max(power for power, _ in troop_powers)
+        max_troop_health = max(health for health, _ in troop_healths)
+        max_building_power = max(power for power, _ in building_powers)
+        max_building_health = max(health for health, _ in building_healths)
+        for power, (row, col) in troop_powers:
+            observation[row, col, CnnChannels.TROOP_POWER.value] = power/max_troop_power
+        for health, (row, col) in troop_healths:
+            observation[row, col, CnnChannels.TROOP_HEALTH.value] = health/max_troop_health
+        for power, (row, col) in building_powers:
+            observation[row, col, CnnChannels.BUILDING_POWER.value] = power/max_building_power
+        for health, (row, col) in building_healths:
+            observation[row, col, CnnChannels.BUILDING_HEALTH.value] = health/max_building_health
 
         #I AM LAZY, NEEDT TO CHANGE CODE BUT LET'S SEE IF THIS EVEN WORKS
         # Reorder dimensions to (Channels, Rows, Columns)
@@ -319,17 +334,21 @@ class Terrain:
         #get troops with moves
         troops = [troop for troop in troops if troop.moves > 0]
 
-        target_row, target_col = self._get_action(actions, mask)
-        if target_row is None:
-            return Rewards.INVALID.value, False, ai_turn
+        target_row, target_col, no_model_action = self._get_action(actions, mask)
+        #give bad reward and choose a random move to get it unstuck
+        if no_model_action:
+            print("INVALID")
+            reward = Rewards.INVALID.value
 
         #model doesn't specify which troop to use so I just find the closest troop
         troop = self.get_nearest_troop(target_row, target_col, troops)   
+        #TROOP NOT FOUND, SO SOMETHING MUST BE WRONG WITH GET_NEAREST_TROOP
         target_troop = self.tiles[target_row, target_col].troop
         target_building = self.tiles[target_row, target_col].building
 
         #just move
-        if target_troop is None and target_building is None:
+        if (target_troop is None and target_building is None) or \
+            (target_building and target_building.player_id == player.id):
             reward = self._move(target_row, target_col, troop)
 
         #fortify if the tile it is standing on
@@ -369,15 +388,18 @@ class Terrain:
         return (row, col) in adjacent_cells
     
     def _get_action(self, actions, mask):
+        #network didn't choose any action
+        no_model_action = False
         #mask invalid actions
         actions = actions*mask
+        
         # Get indices of valid actions.
-        valid_indices = np.where(actions != 0)[0] 
+        valid_indices = np.where(actions != 0)[0]
 
         # If no valid actions.
         if len(valid_indices) == 0:
-            return None, None
-
+            valid_indices = np.where(mask == 1)[0]
+            no_model_action = True
         # Get values of valid actions.
         valid_actions = actions[valid_indices]
 
@@ -389,7 +411,7 @@ class Terrain:
 
         # Get row and col coordinates.
         target_row, target_col = divmod(action, self.row_count) 
-        return target_row, target_col
+        return target_row, target_col, no_model_action
        
     def _fortify(self, troop):
         #Fortification bonus calculations
@@ -436,7 +458,6 @@ class Terrain:
         damage_to_attacker = 30*math.exp(0.04 * (def_power-attack_power)) * rand
         defender.health -= damage_to_defender
         attacker.health -= damage_to_attacker
-        #print(f"Attacking troop at {new_row}, {new_col}, damage dealt: {damage_to_defender}, damage received: {damage_to_attacker}")
         
         self._update_hp_power_loss(attacker)
         if isinstance(defender, Troop):
