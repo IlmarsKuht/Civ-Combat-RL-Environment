@@ -20,6 +20,10 @@ If I add more cities, I need to change so my game doesn't stop when a city is de
 
 What debuffs do cities suffer from
 
+Prallelize training of model iwth vector env? (check how to do it)
+
+SHould agent be punished for the game ending
+
 
 LOW PRIORITY:
 

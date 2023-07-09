@@ -25,18 +25,18 @@ class CnnChannels(Enum):
     CAN_MOVE = 4
 
 class Rewards(Enum):
-    KILL_TROOP = 10
-    LOSE_TROOP = -10
-    KILL_CITY = 50
-    LOSE_CITY = -50
-    ATTACK = 5
-    DEFAULT = -2
-    INVALID = -50
+    KILL_TROOP = 1
+    LOSE_TROOP = -1
+    KILL_CITY = 5
+    LOSE_CITY = -5
+    ATTACK = 0.6
+    DEFAULT = 0
+    INVALID = -5
 
 DIRECTIONS_ODD = [(-1, 0), (-1, 1), (0, 1), (1, 1), (1, 0), (0, -1)]
 DIRECTIONS_EVEN = [(-1, -1), (-1, 0), (0, 1), (1, 0), (1, -1), (0, -1)]
 
-ROWS, COLUMNS = 5, 5
+ROWS, COLUMNS = 10,10
 
 HEX_SIZE = 100
 

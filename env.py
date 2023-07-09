@@ -11,10 +11,10 @@ from options import BuildingType, TroopType, TileType, CnnChannels, ROWS, \
 
 #pygame grid
 
-MARGIN = 70
+MARGIN = 30
 
 #pygame window
-WIDTH, HEIGHT = 900, 800
+WIDTH, HEIGHT = 1100, 1000
 
 #might break if rows and columns are not even or might not, who knows :)
 
@@ -22,7 +22,7 @@ class Civ6CombatEnv(gym.Env):
     """Custom Environment that follows gym interface."""
 
     #layer can try rgb_array rendering for CNNs.
-    metadata = {"render_modes": ["human"], "render_fps": 1}
+    metadata = {"render_modes": ["human"], "render_fps": 4}
 
     def __init__(self, max_steps=100, render_mode=None):
         super().__init__()
@@ -124,7 +124,7 @@ class Civ6CombatEnv(gym.Env):
 
         #Set the locations of cities, troops allied and enemy with self.np_random
         
-        self._civ_generator(self.player, 1)
+        self._civ_generator(self.player, 3)
         self._civ_generator(self.bot, 0)
         # self._create_building(self.player, 200, 50, BuildingType.CENTER, 0, 1)
         # self._create_building(self.bot, 200, 50, BuildingType.CENTER, 5, 1)
