@@ -1,25 +1,17 @@
 HIGH PRIORITY:
 
-REMOVE LOGS FROM GITHUB
-Give them a little more power, they barely killing the city
-ASK CHATGPT HOW TO GET RID OF ALL THE IF STATEMENTS AND IMPROVE MY CODE AND COMBINE MY CODE
-COMBINE THE THREE GRID SEARCH FUNCTIONS OR MAKE THEM EASEIR, THEY ARE STUPIDLY COMPLEX AND REPETITIVE
-
-Health power between buildings and troops should still be propoprtional, else how does the AI know the power of things
-
-Let players make their own moves (ACTUALLY WOULD BE VERY GOOD FOR DEBUGGING)
-
 
 MEDIUM PRIORITY:
+Only remove movement however much used
+
+Probably I can just use a 1D array for observations
+Return unprocessed observations so the user can do whatever they want
 Different Terrain
 Terrain, Health, combat etc. buffs and DEBUFFS
-a lot of the functions should be made private.
-City centers also should be able to attack
-Modify the grid search functions, try to combine them?
+train a model and put it as the enemy
 Probably move the render functions somewhere else?
 Make troop and building have the same parent class (x, y, health ,power) etc.. and then inherit
-add healing when fortified and maybe a reward for healing? How to encourage AI to heal, he might not find how to do it
-Group damage bonus
+add healing when fortified
 Just go through the wiki and add everything about combat 
 Add unit training
 If I add more cities, I need to change so my game doesn't stop when a city is destroyed
@@ -28,14 +20,10 @@ What debuffs do cities suffer from
 
 Prallelize training of model iwth vector env? (check how to do it)
 
-SHould agent be punished for the game ending
-
 
 LOW PRIORITY:
 
-
-
-Remove movement however much you moved. (NON-priority because useless since AI can see the entire map)
-
 Why Box obs doesn't accept some shapes? (I guess doesn't except not perfect square)
-
+Make the code better
+a lot of the functions should be made private.
+Modify the grid search functions, try to combine them?

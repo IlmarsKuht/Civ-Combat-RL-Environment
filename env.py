@@ -7,14 +7,10 @@ from collections import deque
 
 from entities import Terrain, Troop, Building, Player
 from options import BuildingType, TroopType, TileType, CnnChannels, ROWS, \
-    COLUMNS, DIRECTIONS_EVEN, DIRECTIONS_ODD, Rewards, HEX_SIZE
+    COLUMNS, DIRECTIONS_EVEN, DIRECTIONS_ODD, Rewards, HEX_SIZE, MARGIN, \
+    WIDTH, HEIGHT
 
 #pygame grid
-
-MARGIN = 30
-
-#pygame window
-WIDTH, HEIGHT = 1100, 1000
 
 #might break if rows and columns are not even or might not, who knows :)
 
@@ -22,7 +18,7 @@ class Civ6CombatEnv(gym.Env):
     """Custom Environment that follows gym interface."""
 
     #layer can try rgb_array rendering for CNNs.
-    metadata = {"render_modes": ["human"], "render_fps": 5}
+    metadata = {"render_modes": ["human", "interactable"], "render_fps": 5}
 
     def __init__(self, max_steps=100, render_mode=None):
         super().__init__()
@@ -60,16 +56,18 @@ class Civ6CombatEnv(gym.Env):
         #additional information not returned as observation
         return {}
 
-    def step(self, action):
+    def step(self, action, troop=None):
+        #cannot pass in mask and troop
+        mask = None if troop else self.player_mask
         #do the action
-        reward, terminated, ai_turn = self.terrain.action(action, self.player, self.player_mask)
+        reward, terminated, ai_turn = self.terrain.action(action, self.player, troop=troop, mask=mask)
         self._clean_up(self.player)
         self._clean_up(self.bot)
         
 
         #get the observations and additonal info
 
-        if self.render_mode == "human":
+        if self.render_mode in ["human", "interactable"]:
             self._render_frame()
 
         #do AI move and render again
@@ -103,7 +101,7 @@ class Civ6CombatEnv(gym.Env):
         super().reset(seed=seed)
 
         #Initialize window and clock
-        if self.render_mode == "human" and self.window == None and self.clock == None:
+        if self.render_mode in ["human", "interactable"] and self.window == None and self.clock == None:
             pygame.init()
             pygame.display.init()
             self.window = pygame.display.set_mode((WIDTH, HEIGHT))
@@ -112,7 +110,7 @@ class Civ6CombatEnv(gym.Env):
 
         self.curr_steps = 0
         #reset the game
-        if self.render_mode == "human":
+        if self.render_mode in ["human", "interactable"]:
             self.terrain = Terrain(ROWS, COLUMNS, True, HEX_SIZE, MARGIN)
         else:
             self.terrain = Terrain(ROWS, COLUMNS)
@@ -133,7 +131,7 @@ class Civ6CombatEnv(gym.Env):
         observation = self._get_obs()
         info = self._get_info()
 
-        if self.render_mode == "human":
+        if self.render_mode in ["human", "interactable"]:
             self._render_frame()
 
         return observation, info
@@ -250,6 +248,60 @@ class Civ6CombatEnv(gym.Env):
             if troop.health <= 0:
                 player.troops.remove(troop)
 
+
+
+    def start_interactable(self):
+        if self.render_mode != "interactable":
+            raise RuntimeError("Render mode is not in interactable mode")
+
+        self.reset()
+
+        running = True
+        troop_to_move = None
+        terminated, truncated = False, False
+
+        while running: 
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
+                elif event.type == pygame.KEYDOWN and event.key == pygame.K_m:
+                    
+                    #get mouse position
+                    x, y= pygame.mouse.get_pos()
+    
+                    # Convert pixel coordinates to tile coordinates
+                    # inverting the hex grid placement formula
+                    row = round((y-HEX_SIZE/2-MARGIN)/(HEX_SIZE*3/4))
+                    col = round(((x-HEX_SIZE/2-MARGIN) - ((HEX_SIZE / 2) * (row % 2)))/HEX_SIZE)
+
+                    if 0 <= row < ROWS and 0 <= col < COLUMNS:
+                        if troop_to_move:
+                            #Move the troop to the tile if he can move there
+                            if self.terrain[row, col].highlight == True:
+                                _, _, terminated, truncated, _ = self.step((row, col), troop=troop_to_move)
+                            #Clear the highlights off the board
+                            for tile_row in range(ROWS):
+                                for tile_col in range(COLUMNS):
+                                    self.terrain[tile_row, tile_col].highlight = False
+                            troop_to_move = None
+
+                        elif self.terrain[row, col].troop and self.terrain[row, col].troop.player_id == self.player.id:
+                            troop_to_move = self.terrain[row, col].troop
+                            #highlight the moves of the troop
+                            obs = self.terrain.get_reachable_pos(troop_to_move)
+
+                            for tile_row in range(ROWS):
+                                for tile_col in range(COLUMNS):
+                                    self.terrain[tile_row, tile_col].highlight = True if obs[tile_row, tile_col] == 1 else False
+
+                        if terminated or truncated:
+                            self.reset()
+                            terminated, truncated = False, False
+                        else:
+                            self._render_frame()
+
+
+            
 
 
 

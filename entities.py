@@ -58,17 +58,22 @@ class Tile:
     HEXAGON_IMAGE = pygame.transform.scale(HEXAGON_IMAGE, (HEX_SIZE, HEX_SIZE))  
     HEXAGON_IMAGE = pygame.transform.rotate(HEXAGON_IMAGE, 90)
 
+    HEXAGON_OVERLAY_IMAGE = pygame.image.load('./images/overlay.png')  
+    HEXAGON_OVERLAY_IMAGE = pygame.transform.scale(HEXAGON_OVERLAY_IMAGE, (HEX_SIZE, HEX_SIZE))  
+    HEXAGON_OVERLAY_IMAGE = pygame.transform.rotate(HEXAGON_OVERLAY_IMAGE, 90)
+
     WARRIOR_IMAGE = pygame.image.load('./images/warrior.png')
     WARRIOR_IMAGE = pygame.transform.scale(WARRIOR_IMAGE, (HEX_SIZE/2, HEX_SIZE/2))  
 
     CITY_CENTER_IMAGE = pygame.image.load('./images/city_center.png')
     CITY_CENTER_IMAGE = pygame.transform.scale(CITY_CENTER_IMAGE, (HEX_SIZE/2, HEX_SIZE/2))  
 
-    def __init__(self, type:TileType, move_cost=1, obstacle=False, draw=False, x=None, y=None, size=None, owner=None):
+    def __init__(self, type:TileType, move_cost=1, obstacle=False, draw=False, x=None, y=None, size=None, owner=None, highlight=False):
         if draw:
             self.x = x+size/2
             self.y = y+size/2
             self.size = size
+            self.highlight = highlight
         self.obstacle = obstacle
         self.troop = None
         self.building = None
@@ -84,6 +89,8 @@ class Tile:
         #Draw hexagon
         #I have centered x and y, so I need to adjust the tiles, so everthing else can stay the same
         window.blit(Tile.HEXAGON_IMAGE, (self.x-self.size/2, self.y-self.size/2))
+        if self.highlight:
+            window.blit(Tile.HEXAGON_OVERLAY_IMAGE, (self.x-self.size/2, self.y-self.size/2))
 
         # Draw Troop
         if self.troop:
@@ -141,7 +148,7 @@ class Terrain:
             for col in range(self.column_count):
                 if draw:
                     x = size * col + (size/2 * (row % 2)) 
-                    y = size * 3/2 * row / 2 
+                    y = size * 3/4 * row
                     tile = Tile(TileType.PLAINS, 1, False, True, x+margin, y+margin, size)
                 else:
                     tile = Tile(TileType.PLAINS)
@@ -295,18 +302,16 @@ class Terrain:
 
 
         #normalize power and health between 0 and 1
-        max_troop_power = max(power for power, _ in troop_powers)
-        max_troop_health = max(health for health, _ in troop_healths)
-        max_building_power = max(power for power, _ in building_powers)
-        max_building_health = max(health for health, _ in building_healths)
+        max_power = max([power for power, _ in troop_powers] + [power for power, _ in building_powers])
+        max_health = max([health for health, _ in troop_healths] + [health for health, _ in building_healths])
         for power, (row, col) in troop_powers:
-            observation[row, col, CnnChannels.TROOP_POWER.value] = power/max_troop_power
+            observation[row, col, CnnChannels.TROOP_POWER.value] = power/max_power
         for health, (row, col) in troop_healths:
-            observation[row, col, CnnChannels.TROOP_HEALTH.value] = health/max_troop_health
+            observation[row, col, CnnChannels.TROOP_HEALTH.value] = health/max_health
         for power, (row, col) in building_powers:
-            observation[row, col, CnnChannels.BUILDING_POWER.value] = power/max_building_power
+            observation[row, col, CnnChannels.BUILDING_POWER.value] = power/max_power
         for health, (row, col) in building_healths:
-            observation[row, col, CnnChannels.BUILDING_HEALTH.value] = health/max_building_health
+            observation[row, col, CnnChannels.BUILDING_HEALTH.value] = health/max_health
 
         #I AM LAZY, NEEDT TO CHANGE CODE BUT LET'S SEE IF THIS EVEN WORKS
         # Reorder dimensions to (Channels, Rows, Columns)
@@ -319,30 +324,38 @@ class Terrain:
             for tile in row:
                 tile.draw(window)
 
-    def action(self, actions, player, mask):
+    #For interactive mode action is (row, col)
+    #otherwise grid of all possibilities and mask masking the actions
+    #probably the mask should be implemented in the terrain not in the environment? what do you think
+    def action(self, actions, player, troop=None, mask=None):
         reward = Rewards.DEFAULT.value
         terminated = False
         ai_turn = False
+        no_model_action = False
         troops = player.troops
+
+        #INTERACTIVE CHECK
+        if troop==None:
+
+            #first check if there even is a troop
+            if len(troops) == 0 or len(player.buildings) == 0:
+                #because no troops, the game is basically lost
+                return Rewards.LOSE_CITY.value, True, ai_turn
+            
+            #get troops with moves
+            troops = [troop for troop in troops if troop.moves > 0]
+            #chooses a random move if model didn't have a move
+            target_row, target_col, no_model_action = self._get_action(actions, mask)
         
 
-        #first check if there even is a troop
-        if len(troops) == 0 or len(player.buildings) == 0:
-            #because no troops, the game is basically lost
-            return Rewards.LOSE_CITY.value, True, ai_turn
-        
-        #get troops with moves
-        troops = [troop for troop in troops if troop.moves > 0]
-        #chooses a random move if model didn't have a move
-        target_row, target_col, no_model_action= self._get_action(actions, mask)
-       
-
-        #model doesn't specify which troop to use so I just find the closest troop
-        troop = self.get_nearest_troop(target_row, target_col, troops)   
+            #model doesn't specify which troop to use so I just find the closest troop
+            troop = self.get_nearest_troop(target_row, target_col, troops)   
+        else:
+            target_row = actions[0]
+            target_col = actions[1]
         #TROOP NOT FOUND, SO SOMETHING MUST BE WRONG WITH GET_NEAREST_TROOP
         target_troop = self.tiles[target_row, target_col].troop
         target_building = self.tiles[target_row, target_col].building
-
         #just move
         if (target_troop is None and target_building is None) or \
             (target_building and target_building.player_id == player.id):

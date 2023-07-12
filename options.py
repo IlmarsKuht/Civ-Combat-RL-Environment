@@ -27,13 +27,13 @@ class CnnChannels(Enum):
     CAN_MOVE = 6
 
 class Rewards(Enum):
-    KILL_TROOP = 1
-    LOSE_TROOP = -1
-    KILL_CITY = 5
-    LOSE_CITY = -5
-    ATTACK = 0.6
-    DEFAULT = 0
-    INVALID = -5
+    KILL_TROOP = 5
+    LOSE_TROOP = -5
+    KILL_CITY = 25
+    LOSE_CITY = -25
+    ATTACK = 3
+    DEFAULT = -1
+    INVALID = -25
 
 DIRECTIONS_ODD = [(-1, 0), (-1, 1), (0, 1), (1, 1), (1, 0), (0, -1)]
 DIRECTIONS_EVEN = [(-1, -1), (-1, 0), (0, 1), (1, 0), (1, -1), (0, -1)]
@@ -41,6 +41,11 @@ DIRECTIONS_EVEN = [(-1, -1), (-1, 0), (0, 1), (1, 0), (1, -1), (0, -1)]
 ROWS, COLUMNS = 6, 6
 
 HEX_SIZE = 100
+
+MARGIN = 30
+
+#pygame window
+WIDTH, HEIGHT = 1100, 1000
 
 
 #fortified bonus is given when a troop has fortified and not used any movement
