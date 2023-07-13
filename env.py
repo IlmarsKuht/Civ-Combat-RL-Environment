@@ -24,7 +24,6 @@ class Civ6CombatEnv(gym.Env):
         super().__init__()
 
         #Game variables
-        self.player_mask = None
 
         #pygame variables
         self.window = None
@@ -46,10 +45,6 @@ class Civ6CombatEnv(gym.Env):
     def _get_obs(self):
         observation = self.terrain.get_obs(self.player)
         
-        #Keep the mask for valid actions later
-        self.player_mask = observation[CnnChannels.CAN_MOVE.value, :, :]
-        self.player_mask = np.where(self.player_mask == -1, 0, self.player_mask).astype(dtype=np.uint8).flatten()
-
         return observation
     
     def _get_info(self):
@@ -60,49 +55,62 @@ class Civ6CombatEnv(gym.Env):
         #if troop not chosen get all troops with moves
         troops = [troop] if troop else [player_troop for player_troop in self.player.troops if player_troop.moves > 0]
         #do the action
-        reward, terminated = self.terrain.action(action, troops=troops, mask=self.player_mask)
+        reward = self.terrain.action(action, troops=troops)
 
         if self.render_mode in ["human", "interactable"]:
             self._render_frame()
 
-        final_reward, terminated, truncated = self._after_step()
-        if terminated or truncated:
-            reward = final_reward
+        second_reward, terminated, truncated = self._after_step()
+        reward += second_reward
         
         observation = self._get_obs()
         info = self._get_info()
-
         return observation, reward, terminated, truncated, info
     
     def _after_step(self):
-        reward = Rewards.DEFAULT.value
+        reward = 0
         terminated = False
         truncated = False
-        self._clean_up(self.player)
-        self._clean_up(self.bot)
-
-        #check if player lost
-        if len(self.player.troops) == 0 or len(self.player.buildings) == 0:
-            terminated = True
-            reward = Rewards.KILL_CITY.value
-
-        #check if player won
-        if len(self.bot.buildings) == 0:
-            terminated = True
-            reward = Rewards.LOSE_CITY.value
 
         #do ai move, reset player moves
         ai_turn = all([troop.moves==0 for troop in self.player.troops])
         if ai_turn:
+            #it's already negated
             self._reset_moves(self.player)
+            for bot in self.bots:
+                reward += self._ai_sim(bot)
+                self._reset_moves(bot)
+            if self.render_mode in ["human", "interactable"]:
+                self._render_frame()
+
+        self._clean_up(self.player)
+        for bot in self.bots:
+            self._clean_up(bot)
 
         self.curr_steps += 1
         truncated = self.curr_steps >= self.max_steps
-        #if time limit is up
-        if truncated:
-            reward = Rewards.LOSE_CITY.value
-        
+
+        #check if player lost
+        if len(self.player.troops) == 0 or len(self.player.buildings) == 0 or truncated:
+            terminated = True
+            reward -= Rewards.WIN_GAME.value
+
+        #check if player won
+        if all([len(bot.buildings)==0 for bot in self.bots]):
+            terminated = True
+            reward += Rewards.WIN_GAME.value
         return reward, terminated, truncated
+    
+    def _ai_sim(self, bot : Player):
+        reward = 0
+        for troop in [troop for troop in bot.troops if troop.moves > 0]:
+            possible_moves = self.terrain.get_reachable_pos([troop])
+            indices = np.where(possible_moves == 1)
+            indices = list(zip(indices[0], indices[1]))
+            random_move = random.choice(indices)
+            reward -= self.terrain.action(random_move, [troop])
+        return reward
+
 
     def reset(self, seed=None, options=None):
         # We need the following line to seed self.np_random
@@ -125,13 +133,14 @@ class Civ6CombatEnv(gym.Env):
 
         #initalize the players
         self.player = Player("JiaoJiao")
-        self.bot = Player("Ilmars")
+        self.bots = [Player("Ilmars"), Player("ChouChou")]
         
 
         #Set the locations of cities, troops allied and enemy with self.np_random
         
-        self._civ_generator(self.player, 3)
-        self._civ_generator(self.bot, 0)
+        self._civ_generator(self.player, 7)
+        for bot in self.bots:
+            self._civ_generator(bot, 2)
        
         observation = self._get_obs()
         info = self._get_info()
@@ -292,7 +301,7 @@ class Civ6CombatEnv(gym.Env):
                         elif tile.troop and tile.troop.moves > 0 and tile.troop.player_id == self.player.id:
                             troop_to_move = tile.troop
                             #highlight the moves of the troop
-                            obs = self.terrain.get_reachable_pos(troop_to_move)
+                            obs = self.terrain.get_reachable_pos([troop_to_move])
                             for tile_row in range(ROWS):
                                 for tile_col in range(COLUMNS):
                                     self.terrain[tile_row, tile_col].highlight = True if obs[tile_row, tile_col] == 1 else False

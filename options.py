@@ -18,29 +18,28 @@ PLAYER_COLORS = [(255,0,0), (255,0,255), (0,0,255), (0, 255, 255)]
 
 class CnnChannels(Enum):
     # 1 is True | 0 is False | -1 is no value
-    IS_ENEMY_BUILDING = 0
-    IS_ENEMY_TROOP = 1
-    TROOP_HEALTH = 2
-    TROOP_POWER = 3
-    BUILDING_HEALTH = 4
-    BUILDING_POWER = 5
-    CAN_MOVE = 6
+    IS_ENEMY_BUILDING = 0 # bool values
+    IS_ENEMY_TROOP = 1 # bool values
+    TROOP_HEALTH = 2 # real values
+    TROOP_POWER = 3 # real values
+    BUILDING_HEALTH = 4 # real values
+    BUILDING_POWER = 5 # real values
+    CAN_MOVE = 6 # bool values
 
 class Rewards(Enum):
     KILL_TROOP = 5
-    LOSE_TROOP = -5
     KILL_CITY = 25
-    LOSE_CITY = -25
     ATTACK = 3
-    DEFAULT = -1
+    DEFAULT = 0
     INVALID = -25
+    WIN_GAME = 100
 
 DIRECTIONS_ODD = [(-1, 0), (-1, 1), (0, 1), (1, 1), (1, 0), (0, -1)]
 DIRECTIONS_EVEN = [(-1, -1), (-1, 0), (0, 1), (1, 0), (1, -1), (0, -1)]
 
-ROWS, COLUMNS = 6, 6
+ROWS, COLUMNS = 8, 8
 
-HEX_SIZE = 100
+HEX_SIZE = 120
 
 MARGIN = 30
 

@@ -1,11 +1,9 @@
 from stable_baselines3.common.env_checker import check_env
 from stable_baselines3 import PPO
 
-import torch
-
 from env import Civ6CombatEnv
 
-from CNN import CustomCNN
+from unitTest import unitTest
 
 
 def main():
@@ -42,4 +40,5 @@ def main():
     env.start_interactable()
 
 if __name__ == "__main__":
+    unitTest()
     main()

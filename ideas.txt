@@ -2,20 +2,28 @@ WORKING NOW:
 
 
 HIGH PRIORITY:
-Hard to see anythign when unit is in the city
+
 ADD UNIT TESTS to test observation and edge cases (out of map, no moves, etc...)
 The unit test should be made so that future changes don't break it (test things that should always be the same)
 
 MEDIUM PRIORITY:
+If a player has no more cities, he should be removed from the game (all troops killed and everything removed)
+robably need to rethink the rewards. Maybe reward for damage dealt/taken not just attacking
+Putting a minus default reward is kind of weird because of how the system is set up, the player will get rewarded
+for AI making default moves. Probably I should set up different rewards for player and bot? Maybe bot rewards are less,
+so the player focuses on his own strategy not on predicting what the bot does so much
 
+Document my code how it was documented professionally in the video
+Let user define grid size when creating the env
+Observations are too complicated, try to make them easier, the game is not that complicated to have hundreds or thousands of observations
+Hard to see anythign when unit is in the city
 Separate rewards for killing city and winning
 make the AI to just attack everythign in sight
 Try to make the environment deterministic (use the seed)
 
 Probably I can make a HUD at the bottom, when you click on a troop it shows all info at the bottom
-Instead of on the troop?
 The troop can show general health (healthbar), but when clicked should also show the number
-
+Do animations between moves and attacks so can tell what is going on and troops don't just magically teleport
 Probably I can just use a 1D array for observations
 Return unprocessed observations so the user can do whatever they want
 Different Terrain
@@ -29,6 +37,8 @@ Add unit training
 
 
 LOW PRIORITY:
+
+Package my project later
 
 Why Box obs doesn't accept some shapes? (I guess doesn't except not perfect square)
 Make the code better

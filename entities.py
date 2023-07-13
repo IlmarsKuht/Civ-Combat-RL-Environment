@@ -203,48 +203,50 @@ class Terrain:
         return nearest_troop, min_moves, best_path
     
     #this could probably be optimized
-    def get_reachable_pos(self, troop : Troop):
+    def get_reachable_pos(self, troops):
         observation = np.full((self.row_count, self.column_count), -1)
-        # Use a queue to perform a breadth-first search
-        queue = deque([(troop.row, troop.col, 0)])
-        max_moves = troop.moves
-        while queue:
-            curr_x, curr_y, moves = queue.popleft()
-            curr_tile = self.tiles[curr_x, curr_y]
-            curr_obs = observation[curr_x, curr_y]
+        for troop in troops:
+            # Use a queue to perform a breadth-first search
+            queue = deque([(troop.row, troop.col, 0)])
+            max_moves = troop.moves
+            while queue:
+                curr_x, curr_y, moves = queue.popleft()
+                curr_tile = self.tiles[curr_x, curr_y]
+                curr_obs = observation[curr_x, curr_y]
 
-            # Not reachable
-            if moves > max_moves or curr_tile.obstacle:
-                continue
-            # Not improvable
-            if curr_obs > 0 and curr_obs < moves:
-                continue
+                # Not reachable
+                if moves > max_moves or curr_tile.obstacle:
+                    continue
+                # Not improvable
+                if curr_obs > 0 and curr_obs < moves:
+                    continue
 
-            # Check the tile's troop and building
-            tile_troop = curr_tile.troop
-            tile_building = curr_tile.building
+                # Check the tile's troop and building
+                tile_troop = curr_tile.troop
+                tile_building = curr_tile.building
 
-            #Friendly troop (not starting position)
-            if (curr_x != troop.row or curr_y != troop.col) \
-            and (tile_troop and tile_troop.player_id == troop.player_id):
-                observation[curr_x, curr_y] = 0
-                continue
+                #Friendly troop (not starting position)
+                if (curr_x != troop.row or curr_y != troop.col) \
+                    and (tile_troop and tile_troop.player_id == troop.player_id):
+                    if observation[curr_x, curr_y] != 1:
+                        observation[curr_x, curr_y] = 0
+                    continue
 
-            #enemy troop or building
-            elif (tile_troop and tile_troop.player_id != troop.player_id) \
-                or (tile_building and tile_building.player_id != troop.player_id):
-                observation[curr_x, curr_y] = 1
-                continue
-            #just move
-            else:
-                observation[curr_x, curr_y] = 1
-                 
+                #enemy troop or building
+                elif (tile_troop and tile_troop.player_id != troop.player_id) \
+                    or (tile_building and tile_building.player_id != troop.player_id):
+                    observation[curr_x, curr_y] = 1
+                    continue
+                #just move
+                else:
+                    observation[curr_x, curr_y] = 1
+                    
 
-            directions = DIRECTIONS_EVEN if curr_x % 2 == 0 else DIRECTIONS_ODD
-            for dx, dy in directions:
-                nx, ny = curr_x + dx, curr_y + dy
-                if nx >= 0 and nx < self.row_count and ny >= 0 and ny < self.column_count:
-                    queue.append((nx, ny, moves+self.tiles[nx, ny].move_cost))
+                directions = DIRECTIONS_EVEN if curr_x % 2 == 0 else DIRECTIONS_ODD
+                for dx, dy in directions:
+                    nx, ny = curr_x + dx, curr_y + dy
+                    if nx >= 0 and nx < self.row_count and ny >= 0 and ny < self.column_count:
+                        queue.append((nx, ny, moves+self.tiles[nx, ny].move_cost))
         return observation
 
     
@@ -282,7 +284,8 @@ class Terrain:
                     #Update UnitMoveChannel to show which unit to move
                     if troop.player_id == player.id and troop.moves > 0:
                         #mark reachable positions
-                        new_values = self.get_reachable_pos(troop)
+                        #this can be optimized by just passing all the troops once
+                        new_values = self.get_reachable_pos([troop])
                         
                         current_values = observation[:, :, CnnChannels.CAN_MOVE.value]
 
@@ -321,15 +324,14 @@ class Terrain:
     #probably the mask should be implemented in the terrain not in the environment? what do you think
 
     #REMOVE THE PLAYER, WE DON'T NEED HIM, JUST STRAIGHT UP PASS IN THE TROOPS
-    def action(self, actions, troops, mask=None):
+    def action(self, actions, troops):
         reward = Rewards.DEFAULT.value
-        terminated = False
         no_model_action = False
         path = []
         
         if len(actions) != 2:
             #chooses a random move if model didn't have a move
-            target_row, target_col, no_model_action = self._get_action(actions, mask)
+            target_row, target_col, no_model_action = self._get_action(actions, troops)
         else:
             #When a move is chosen
             target_row = actions[0]
@@ -354,15 +356,15 @@ class Terrain:
             self._move(path[-2][0], path[-2][1], troop)
             #then attack
             if target_building:
-                reward, terminated = self._attack(target_row, target_col, troop, target_building)
+                reward = self._attack(troop, target_building)
             elif target_troop:
-                reward, terminated = self._attack(target_row, target_col, troop, target_troop)
+                reward = self._attack(troop, target_troop)
 
         #give bad reward and choose
         if no_model_action:
             reward = Rewards.INVALID.value
 
-        return reward, terminated
+        return reward
     
     def _is_adjacent(self, row, col, target_row, target_col):
         target_directions = DIRECTIONS_EVEN if target_row % 2 == 0 else DIRECTIONS_ODD
@@ -370,8 +372,11 @@ class Terrain:
                     if 0 <= target_row + dx < self.row_count and 0 <= target_col + dy < self.column_count]
         return (row, col) in adjacent_cells
     
-    def _get_action(self, actions, mask):
+    def _get_action(self, actions, troops):
         no_model_action = False
+
+        #get all valid actions
+        mask = self.get_reachable_pos(troops).flatten()
         #mask invalid actions
         actions = actions*mask
         
@@ -423,7 +428,7 @@ class Terrain:
         reward = Rewards.DEFAULT.value
         return reward
 
-    def _attack(self, new_row, new_col, attacker, defender):
+    def _attack(self, attacker, defender):
         attacker.moves = 0
         self._remove_fortify_bonus(attacker)
         #get the defending and attacking troops power
@@ -441,9 +446,9 @@ class Terrain:
         if isinstance(defender, Troop):
             self._update_hp_power_loss(defender)
 
-        reward, terminated = self._handle_fight(attacker, defender)
+        reward = self._handle_fight(attacker, defender)
 
-        return reward, terminated
+        return reward
     
     def _update_hp_power_loss(self, troop):
         troop.power += troop.hp_power_loss
@@ -453,7 +458,6 @@ class Terrain:
     def _handle_fight(self, attacker, defender):
         move_row, move_col = None, None
         reward = Rewards.ATTACK.value
-        terminated = False
         unit_to_kill = None
 
         if defender.health <= 0 and attacker.health <= 0:
@@ -475,21 +479,19 @@ class Terrain:
 
         # Finally, kill the designated unit and return the reward.
         if unit_to_kill:
-            reward, terminated = self._kill_entity(unit_to_kill)
+            kill_reward = self._kill_entity(unit_to_kill)
+            reward += kill_reward if unit_to_kill==defender else -kill_reward
         #if attacker killed defender, move attacker
         if move_row is not None:
             self._move(move_row, move_col, attacker)
-
-        return reward, terminated
+        return reward
 
 
     def _kill_entity(self, entity):
         if isinstance(entity, Troop):
             self.tiles[entity.row, entity.col].troop = None
             reward = Rewards.KILL_TROOP.value
-            terminated = False
         elif isinstance(entity, Building):
             self.tiles[entity.row, entity.col].building = None
             reward = Rewards.KILL_CITY.value
-            terminated = True
-        return reward, terminated
+        return reward
