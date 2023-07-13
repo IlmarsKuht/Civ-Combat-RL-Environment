@@ -1,8 +1,20 @@
-HIGH PRIORITY:
+WORKING NOW:
 
+
+HIGH PRIORITY:
+Hard to see anythign when unit is in the city
+ADD UNIT TESTS to test observation and edge cases (out of map, no moves, etc...)
+The unit test should be made so that future changes don't break it (test things that should always be the same)
 
 MEDIUM PRIORITY:
-Only remove movement however much used
+
+Separate rewards for killing city and winning
+make the AI to just attack everythign in sight
+Try to make the environment deterministic (use the seed)
+
+Probably I can make a HUD at the bottom, when you click on a troop it shows all info at the bottom
+Instead of on the troop?
+The troop can show general health (healthbar), but when clicked should also show the number
 
 Probably I can just use a 1D array for observations
 Return unprocessed observations so the user can do whatever they want
@@ -14,11 +26,6 @@ Make troop and building have the same parent class (x, y, health ,power) etc.. a
 add healing when fortified
 Just go through the wiki and add everything about combat 
 Add unit training
-If I add more cities, I need to change so my game doesn't stop when a city is destroyed
-
-What debuffs do cities suffer from
-
-Prallelize training of model iwth vector env? (check how to do it)
 
 
 LOW PRIORITY:
@@ -26,4 +33,5 @@ LOW PRIORITY:
 Why Box obs doesn't accept some shapes? (I guess doesn't except not perfect square)
 Make the code better
 a lot of the functions should be made private.
-Modify the grid search functions, try to combine them?
+
+Prallelize training of model with vector env? (check how to do it)

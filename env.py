@@ -57,44 +57,52 @@ class Civ6CombatEnv(gym.Env):
         return {}
 
     def step(self, action, troop=None):
-        #cannot pass in mask and troop
-        mask = None if troop else self.player_mask
+        #if troop not chosen get all troops with moves
+        troops = [troop] if troop else [player_troop for player_troop in self.player.troops if player_troop.moves > 0]
         #do the action
-        reward, terminated, ai_turn = self.terrain.action(action, self.player, troop=troop, mask=mask)
-        self._clean_up(self.player)
-        self._clean_up(self.bot)
-        
-
-        #get the observations and additonal info
+        reward, terminated = self.terrain.action(action, troops=troops, mask=self.player_mask)
 
         if self.render_mode in ["human", "interactable"]:
             self._render_frame()
 
-        #do AI move and render again
-        if ai_turn:
-            #action, troop = self._rand_action(self.bot)
-            # if action is not None and troop is not None:
-            #     reward -= self.terrain.action(action, troop)
-
-            # self._clean_up(self.player)
-            # self._clean_up(self.bot)
-
-            #if self.render_mode == "human":
-            #   self._render_frame()
-            self._reset_moves(self.player)
-            #self._reset_moves(self.bot)
-
+        final_reward, terminated, truncated = self._after_step()
+        if terminated or truncated:
+            reward = final_reward
         
         observation = self._get_obs()
         info = self._get_info()
 
-        self.curr_steps += 1
-        #check what to do with truncated
-        truncated = self.curr_steps >= self.max_steps
-        if truncated:
+        return observation, reward, terminated, truncated, info
+    
+    def _after_step(self):
+        reward = Rewards.DEFAULT.value
+        terminated = False
+        truncated = False
+        self._clean_up(self.player)
+        self._clean_up(self.bot)
+
+        #check if player lost
+        if len(self.player.troops) == 0 or len(self.player.buildings) == 0:
+            terminated = True
+            reward = Rewards.KILL_CITY.value
+
+        #check if player won
+        if len(self.bot.buildings) == 0:
+            terminated = True
             reward = Rewards.LOSE_CITY.value
 
-        return observation, reward, terminated, truncated, info
+        #do ai move, reset player moves
+        ai_turn = all([troop.moves==0 for troop in self.player.troops])
+        if ai_turn:
+            self._reset_moves(self.player)
+
+        self.curr_steps += 1
+        truncated = self.curr_steps >= self.max_steps
+        #if time limit is up
+        if truncated:
+            reward = Rewards.LOSE_CITY.value
+        
+        return reward, terminated, truncated
 
     def reset(self, seed=None, options=None):
         # We need the following line to seed self.np_random
@@ -124,9 +132,6 @@ class Civ6CombatEnv(gym.Env):
         
         self._civ_generator(self.player, 3)
         self._civ_generator(self.bot, 0)
-        # self._create_building(self.player, 200, 50, BuildingType.CENTER, 0, 1)
-        # self._create_building(self.bot, 200, 50, BuildingType.CENTER, 5, 1)
-        # self._create_troop(self.player, 100, 500, 2, 2, TroopType.WARRIOR, 0, 2)
        
         observation = self._get_obs()
         info = self._get_info()
@@ -161,7 +166,6 @@ class Civ6CombatEnv(gym.Env):
             pygame.display.quit()
             pygame.quit()
 
-    
     def _render_frame(self):
         self.window.fill((0, 0, 0))  # clear the screen before drawing
         self.terrain.draw(self.window) 
@@ -233,11 +237,6 @@ class Civ6CombatEnv(gym.Env):
                     queue.append((nx, ny))
         return free_positions
         
-    
-    
-    
-    #COULD COMBINE RESET MOVES AND CLEAN UP IN ONE FUNCTION? OR NOT BECUASE CLEAN UP AFTER EVERY STEP 
-    # BUT RESET MOVES ONLY AFTER THE AI MOVES
     def _reset_moves(self, player : Player):
         for troop in player.troops:
             troop.moves = troop.max_moves
@@ -247,6 +246,9 @@ class Civ6CombatEnv(gym.Env):
         for troop in player.troops:
             if troop.health <= 0:
                 player.troops.remove(troop)
+        for building in player.buildings:
+            if building.health <= 0:
+                player.buildings.remove(building)
 
 
 
@@ -270,14 +272,15 @@ class Civ6CombatEnv(gym.Env):
                     x, y= pygame.mouse.get_pos()
     
                     # Convert pixel coordinates to tile coordinates
-                    # inverting the hex grid placement formula
+                    # inverting the hex grid placement formula in entities
                     row = round((y-HEX_SIZE/2-MARGIN)/(HEX_SIZE*3/4))
                     col = round(((x-HEX_SIZE/2-MARGIN) - ((HEX_SIZE / 2) * (row % 2)))/HEX_SIZE)
 
                     if 0 <= row < ROWS and 0 <= col < COLUMNS:
+                        tile = self.terrain[row, col]
                         if troop_to_move:
                             #Move the troop to the tile if he can move there
-                            if self.terrain[row, col].highlight == True:
+                            if tile.highlight == True:
                                 _, _, terminated, truncated, _ = self.step((row, col), troop=troop_to_move)
                             #Clear the highlights off the board
                             for tile_row in range(ROWS):
@@ -285,11 +288,11 @@ class Civ6CombatEnv(gym.Env):
                                     self.terrain[tile_row, tile_col].highlight = False
                             troop_to_move = None
 
-                        elif self.terrain[row, col].troop and self.terrain[row, col].troop.player_id == self.player.id:
-                            troop_to_move = self.terrain[row, col].troop
+                        #if friendly troop with moves
+                        elif tile.troop and tile.troop.moves > 0 and tile.troop.player_id == self.player.id:
+                            troop_to_move = tile.troop
                             #highlight the moves of the troop
                             obs = self.terrain.get_reachable_pos(troop_to_move)
-
                             for tile_row in range(ROWS):
                                 for tile_col in range(COLUMNS):
                                     self.terrain[tile_row, tile_col].highlight = True if obs[tile_row, tile_col] == 1 else False
