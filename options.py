@@ -1,20 +1,13 @@
 from enum import Enum
 
-class BuildingType(Enum):
-    CENTER = "city_center"
-    ENCAMPMENT = "encampment"
-
-class TroopType(Enum):
-    WARRIOR = "warrior"
-    ARCHER = "archer"
-
 class TileType(Enum):
     MOUNTAIN = "mountain"
     HILL = "hill"
     PLAINS = "plains"
     OCEAN = "ocean"
 
-PLAYER_COLORS = [(255,0,0), (255,0,255), (0,0,255), (0, 255, 255)]
+PLAYER_COLOR = (255, 215, 0)
+BOT_COLORS = ((255,0,0), (255,0,255), (0,0,255), (0, 255, 255))
 
 class CnnChannels(Enum):
     # 1 is True | 0 is False | -1 is no value
@@ -34,10 +27,8 @@ class Rewards(Enum):
     INVALID = -25
     WIN_GAME = 100
 
-DIRECTIONS_ODD = [(-1, 0), (-1, 1), (0, 1), (1, 1), (1, 0), (0, -1)]
-DIRECTIONS_EVEN = [(-1, -1), (-1, 0), (0, 1), (1, 0), (1, -1), (0, -1)]
-
-ROWS, COLUMNS = 8, 8
+DIRECTIONS_ODD = ((-1, 0), (-1, 1), (0, 1), (1, 1), (1, 0), (0, -1))
+DIRECTIONS_EVEN = ((-1, -1), (-1, 0), (0, 1), (1, 0), (1, -1), (0, -1))
 
 HEX_SIZE = 120
 

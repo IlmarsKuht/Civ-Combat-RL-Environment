@@ -3,10 +3,16 @@ from stable_baselines3.common.env_checker import check_env
 from env import Civ6CombatEnv
 
 
-def stable_baselines_test(env):
+def stable_baselines_test():
+    env = Civ6CombatEnv(rows=6, columns=6, max_steps=10, render_mode=None)
     check_env(env)
+    env = Civ6CombatEnv(rows=6, columns=6, max_steps=10, render_mode="human", fps=100)
+    check_env(env)
+    env.close()
 
-def random_test(env):
+
+def random_test():
+    env = Civ6CombatEnv(rows=6, columns=6, max_steps=100, render_mode=None)
     env.reset()
     for i in range(10000):
         _, _, terminated, truncated, _ = env.step(env.action_space.sample())
@@ -14,18 +20,26 @@ def random_test(env):
             env.reset()
         if i%1000==0:
             print(f"iteration {i}")
+    env = Civ6CombatEnv(rows=6, columns=6, max_steps=10, render_mode="human", fps=100)
+    env.reset()
+    for i in range(100):
+        _, _, terminated, truncated, _ = env.step(env.action_space.sample())
+        if terminated or truncated:
+            env.reset()
+    env.close()
+
+#NEED A UNIT TEST FOR INTERACTABLE GAME MODE
+#AND UNIT TEST SHOULD SAY WHAT'S THE PROBLEM, NOT JUST RANDOMLY PLAY, but we doin this for now, better than nothing
 
 def unitTest():
-    env = Civ6CombatEnv(max_steps=100, render_mode=None)
-
     #First test using stable baselines
     print(f"Starting stable baselines test")
-    stable_baselines_test(env)
+    stable_baselines_test()
     print(f"Finished stable baselines test")
 
     #completely random test
     print(f"Starting random test")
-    random_test(env)
+    random_test()
     print(f"Finished random test")
    
     

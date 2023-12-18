@@ -5,10 +5,10 @@ import random
 
 from collections import deque
 
-from entities import Terrain, Troop, Building, Player
-from options import BuildingType, TroopType, TileType, CnnChannels, ROWS, \
-    COLUMNS, DIRECTIONS_EVEN, DIRECTIONS_ODD, Rewards, HEX_SIZE, MARGIN, \
-    WIDTH, HEIGHT
+from terrain import Terrain
+from entities import Warrior, Archer, Center, Player
+from options import CnnChannels, DIRECTIONS_EVEN, DIRECTIONS_ODD, Rewards, \
+    HEX_SIZE, MARGIN, WIDTH, HEIGHT, Colors
 
 #pygame grid
 
@@ -18,22 +18,35 @@ class Civ6CombatEnv(gym.Env):
     """Custom Environment that follows gym interface."""
 
     #layer can try rgb_array rendering for CNNs.
-    metadata = {"render_modes": ["human", "interactable"], "render_fps": 5}
+    metadata = {"render_modes": ["human", "interactable"], "render_fps": 2}
 
-    def __init__(self, max_steps=100, render_mode=None):
+    def __init__(self, rows=6, columns=6, max_steps=100, render_mode=None, bots=1, start_troops=2, fps=None):
         super().__init__()
-
+        if fps:
+            self.metadata["render_fps"] = fps
         #Game variables
+        self.row_count = rows
+        self.col_count = columns
+        self.bot_count = bots
+        self.start_troop_count = start_troops
+        self.bots = []
+
+        #Game stats
+        self.last_game_won = None
+        self.score = 0
+        self.all_scores = 0
+        self.wins = 0
+        self.losses = 0
 
         #pygame variables
         self.window = None
         self.clock = None
 
         #FIGURE OUT WHAT ACTION SPACES TO USE
-        self.action_space = gym.spaces.Box(low=0, high=1, shape=(ROWS*COLUMNS,))
+        self.action_space = gym.spaces.Box(low=0, high=1, shape=(self.row_count*self.col_count,))
         
         #Setting up observation space
-        self.observation_space = gym.spaces.Box(low=-1, high=1, shape=(len(CnnChannels), COLUMNS, ROWS,), dtype=np.float32)
+        self.observation_space = gym.spaces.Box(low=-1, high=1, shape=(len(CnnChannels), self.col_count, self.row_count,), dtype=np.float32)
         
         #check if render_mode is valid
         assert render_mode is None or render_mode in self.metadata["render_modes"], f"Invalid render mode, available render modes are {self.metadata['render_modes']}"
@@ -57,14 +70,14 @@ class Civ6CombatEnv(gym.Env):
         #do the action
         reward = self.terrain.action(action, troops=troops)
 
-        if self.render_mode in ["human", "interactable"]:
-            self._render_frame()
-
         second_reward, terminated, truncated = self._after_step()
         reward += second_reward
         
         observation = self._get_obs()
         info = self._get_info()
+
+        #doesn't update instantly, only shows the scores updated in the last step
+        self.score += reward
         return observation, reward, terminated, truncated, info
     
     def _after_step(self):
@@ -72,20 +85,25 @@ class Civ6CombatEnv(gym.Env):
         terminated = False
         truncated = False
 
+        #cleanup before AI move and after
+        reward -= self._cleanup(self.player)
+        for bot in self.bots:
+            reward += self._cleanup(bot)
+
+        if self.render_mode in ["human", "interactable"]:
+            self._render_frame()
+
         #do ai move, reset player moves
         ai_turn = all([troop.moves==0 for troop in self.player.troops])
         if ai_turn:
-            #it's already negated
             self._reset_moves(self.player)
             for bot in self.bots:
                 reward += self._ai_sim(bot)
                 self._reset_moves(bot)
-            if self.render_mode in ["human", "interactable"]:
-                self._render_frame()
 
-        self._clean_up(self.player)
-        for bot in self.bots:
-            self._clean_up(bot)
+            reward -= self._cleanup(self.player)
+            for bot in self.bots:
+                reward += self._cleanup(bot)
 
         self.curr_steps += 1
         truncated = self.curr_steps >= self.max_steps
@@ -94,22 +112,51 @@ class Civ6CombatEnv(gym.Env):
         if len(self.player.troops) == 0 or len(self.player.buildings) == 0 or truncated:
             terminated = True
             reward -= Rewards.WIN_GAME.value
+            self.last_game_won = False
+            self.losses += 1
 
         #check if player won
         if all([len(bot.buildings)==0 for bot in self.bots]):
             terminated = True
             reward += Rewards.WIN_GAME.value
+            self.last_game_won = True
+            self.wins += 1
+
         return reward, terminated, truncated
     
     def _ai_sim(self, bot : Player):
         reward = 0
-        for troop in [troop for troop in bot.troops if troop.moves > 0]:
+        troops = deque([troop for troop in bot.troops if troop.moves > 0])
+        while troops:
+            troop = troops.popleft()
             possible_moves = self.terrain.get_reachable_pos([troop])
             indices = np.where(possible_moves == 1)
             indices = list(zip(indices[0], indices[1]))
             random_move = random.choice(indices)
             reward -= self.terrain.action(random_move, [troop])
+            if self.render_mode in ["human", "interactable"]:
+                self._render_frame()
+            #if still has moves, put it back
+            if troop.moves > 0:
+                troops.append(troop)
         return reward
+    
+    #removes dead troops and buildings from players
+    def _cleanup(self, player : Player):
+        #if eliminating a CIV you also kill all the troops so bonus reward
+        reward = 0
+        for building in player.buildings:
+            if building.health <= 0:
+                player.buildings.remove(building)
+        if len(player.buildings) == 0:
+            reward += self.terrain._cleanup(player.id)
+            player.troops = []
+        else: 
+            for troop in player.troops:
+                if troop.health <= 0:
+                    player.troops.remove(troop)
+        return reward
+
 
 
     def reset(self, seed=None, options=None):
@@ -123,24 +170,29 @@ class Civ6CombatEnv(gym.Env):
             self.window = pygame.display.set_mode((WIDTH, HEIGHT))
             self.clock = pygame.time.Clock()
 
+        #add the old score to total before resetting
+        self.all_scores += self.score
+        self.score = 0
 
         self.curr_steps = 0
         #reset the game
         if self.render_mode in ["human", "interactable"]:
-            self.terrain = Terrain(ROWS, COLUMNS, True, HEX_SIZE, MARGIN)
+            self.terrain = Terrain(self.row_count, self.col_count, True, MARGIN)
         else:
-            self.terrain = Terrain(ROWS, COLUMNS)
+            self.terrain = Terrain(self.row_count, self.col_count)
 
         #initalize the players
         self.player = Player("JiaoJiao")
-        self.bots = [Player("Ilmars"), Player("ChouChou")]
+        self.bots = []
+        for i in range(self.bot_count):
+            self.bots.append(Player(f"{i}"))
         
 
         #Set the locations of cities, troops allied and enemy with self.np_random
         
-        self._civ_generator(self.player, 7)
+        self._civ_generator(self.player, self.start_troop_count)
         for bot in self.bots:
-            self._civ_generator(bot, 2)
+            self._civ_generator(bot, self.start_troop_count)
        
         observation = self._get_obs()
         info = self._get_info()
@@ -152,23 +204,28 @@ class Civ6CombatEnv(gym.Env):
     
     def _civ_generator(self, player, troop_amount):
         #Generate a city in a random place
-        max_attempts = ROWS*COLUMNS*5
+        max_attempts = self.row_count*self.col_count*5
 
-        row = random.randrange(ROWS)
-        col = random.randrange(COLUMNS)
+        row = random.randrange(self.row_count)
+        col = random.randrange(self.col_count)
         while self.terrain[row, col].owner is not None and max_attempts > 0:
-            row = random.randrange(ROWS)
-            col = random.randrange(COLUMNS)
+            row = random.randrange(self.row_count)
+            col = random.randrange(self.col_count)
             max_attempts -= 1
         if max_attempts == 0:
             raise RuntimeError("Couldn't find space for a city, too many cities for the map size")
-        self._create_building(player, 200, 200, 50, BuildingType.CENTER, row, col)
+        self._create_center(player, 200, 200, 50, row, col)
 
         #generate troops adjacent to the city in a random place
         if troop_amount > 0:
+            #I MAKE 2 TIMES MORE TROOPS, REMOVE LATER PROBABLY
             positions = self._get_troop_positions(row, col, troop_amount)
             for troop_row, troop_col in positions:
-                self._create_troop(player, 100, 100, 55, 2, 2, TroopType.WARRIOR, troop_row, troop_col)
+                self._create_warrior(player, 2, 2, 100, 100, 55, troop_row, troop_col)
+            positions = self._get_troop_positions(row, col, troop_amount)
+            for troop_row, troop_col in positions:
+                self._create_archer(player, 2, 2, 2, 100, 100, 55, troop_row, troop_col)
+                
 
     def close(self):
         if self.window is not None:
@@ -177,19 +234,37 @@ class Civ6CombatEnv(gym.Env):
 
     def _render_frame(self):
         self.window.fill((0, 0, 0))  # clear the screen before drawing
-        self.terrain.draw(self.window) 
+        self.terrain.draw(self.window, self.player.id)
+        self._render_game_info()
 
         pygame.event.pump()
         pygame.display.update()  
         self.clock.tick(self.metadata["render_fps"])
+    
+    def _render_game_info(self):
+        x = MARGIN
+        y = HEX_SIZE * 0.75 * (self.row_count+1) + MARGIN
+        font_size = int(HEX_SIZE/5)
+        font = pygame.font.Font(None, font_size)
+        average_score = self.all_scores / (self.wins+self.losses) if self.wins+self.losses != 0 else 0
+        scores_text = font.render(f"Last Game Won: {self.last_game_won} | Score: {self.score} | Average Score: {average_score:.2f}", True, Colors.WHITE.value)
+        ratio = self.wins*100 / (self.wins+self.losses) if self.wins+self.losses != 0 else 0
+        win_losses_text = font.render(f"Wins: {self.wins} | Losses: {self.losses} | Win Ratio: {ratio:.2f}%", True, Colors.WHITE.value)
+        self.window.blit(scores_text, (x, y))
+        y += font_size
+        self.window.blit(win_losses_text, (x, y))
         
     
-    def _create_troop(self, player : Player, health, max_health, power, moves, max_moves, type : TroopType, row, col):
-        self.terrain[row][col].troop = Troop(health, max_health, power, moves, max_moves, player.id, type, row, col)
+    def _create_warrior(self, player : Player, moves, max_moves, health, max_health, power, row, col):
+        self.terrain[row][col].troop = Warrior(moves, max_moves, health, max_health, power,  player.id, row, col)
+        player.troops.append(self.terrain[row][col].troop)
+    
+    def _create_archer(self, player : Player, range, moves, max_moves, health, max_health, power, row, col):
+        self.terrain[row][col].troop = Archer(range, moves, max_moves, health, max_health, power,  player.id, row, col)
         player.troops.append(self.terrain[row][col].troop)
 
-    def _create_building(self, player : Player, health, max_health, power, type : BuildingType, row, col):
-        self.terrain[row][col].building = Building(health, max_health, power, player.id, type, row, col)
+    def _create_center(self, player : Player, health, max_health, power, row, col):
+        self.terrain[row][col].building = Center(health, max_health, power, player.id, row, col)
         player.buildings.append(self.terrain[row][col].building)
         self._update_ownership(row, col, player.id, 3)
 
@@ -216,7 +291,7 @@ class Civ6CombatEnv(gym.Env):
             directions = DIRECTIONS_EVEN if curr_row % 2 == 0 else DIRECTIONS_ODD
             for dr, dc in directions:
                 nr, nc = curr_row + dr, curr_col + dc
-                if 0 <= nr < ROWS and 0 <= nc < COLUMNS:
+                if 0 <= nr < self.row_count and 0 <= nc < self.col_count:
                     queue.append((nr, nc, d + 1))
 
     def _get_troop_positions(self, start_row, start_col, position_count):
@@ -242,23 +317,13 @@ class Civ6CombatEnv(gym.Env):
             directions = DIRECTIONS_EVEN if curr_x % 2 == 0 else DIRECTIONS_ODD
             for dx, dy in directions:
                 nx, ny = curr_x + dx, curr_y + dy
-                if 0 <= nx < ROWS and 0 <= ny < COLUMNS:
+                if 0 <= nx < self.row_count and 0 <= ny < self.col_count:
                     queue.append((nx, ny))
         return free_positions
         
     def _reset_moves(self, player : Player):
         for troop in player.troops:
             troop.moves = troop.max_moves
-
-    #removes dead troops from players
-    def _clean_up(self, player):
-        for troop in player.troops:
-            if troop.health <= 0:
-                player.troops.remove(troop)
-        for building in player.buildings:
-            if building.health <= 0:
-                player.buildings.remove(building)
-
 
 
     def start_interactable(self):
@@ -285,26 +350,39 @@ class Civ6CombatEnv(gym.Env):
                     row = round((y-HEX_SIZE/2-MARGIN)/(HEX_SIZE*3/4))
                     col = round(((x-HEX_SIZE/2-MARGIN) - ((HEX_SIZE / 2) * (row % 2)))/HEX_SIZE)
 
-                    if 0 <= row < ROWS and 0 <= col < COLUMNS:
+                    if 0 <= row < self.row_count and 0 <= col < self.col_count:
                         tile = self.terrain[row, col]
                         if troop_to_move:
                             #Move the troop to the tile if he can move there
-                            if tile.highlight == True:
+                            if tile.highlight_move or tile.highlight_attack:
+                                #Clear the highlight_moves off the board
+                                for tile_row in range(self.row_count):
+                                    for tile_col in range(self.col_count):
+                                        self.terrain[tile_row, tile_col].highlight_move = False
+                                        self.terrain[tile_row, tile_col].highlight_attack = False
                                 _, _, terminated, truncated, _ = self.step((row, col), troop=troop_to_move)
-                            #Clear the highlights off the board
-                            for tile_row in range(ROWS):
-                                for tile_col in range(COLUMNS):
-                                    self.terrain[tile_row, tile_col].highlight = False
-                            troop_to_move = None
+                            else:
+                                #Clear the highlight_moves off the board
+                                for tile_row in range(self.row_count):
+                                    for tile_col in range(self.col_count):
+                                        self.terrain[tile_row, tile_col].highlight_move = False
+                                        self.terrain[tile_row, tile_col].highlight_attack = False
+                                troop_to_move = None
 
                         #if friendly troop with moves
                         elif tile.troop and tile.troop.moves > 0 and tile.troop.player_id == self.player.id:
                             troop_to_move = tile.troop
-                            #highlight the moves of the troop
+                            #highlight_move the moves of the troop
                             obs = self.terrain.get_reachable_pos([troop_to_move])
-                            for tile_row in range(ROWS):
-                                for tile_col in range(COLUMNS):
-                                    self.terrain[tile_row, tile_col].highlight = True if obs[tile_row, tile_col] == 1 else False
+                            for tile_row in range(self.row_count):
+                                for tile_col in range(self.col_count):
+                                    self.terrain[tile_row, tile_col].highlight_move = True if obs[tile_row, tile_col] == 1 else False
+                            obs = self.terrain.range_attackable_pos([troop_to_move])
+                            for tile_row in range(self.row_count):
+                                for tile_col in range(self.col_count):
+                                    if obs[tile_row, tile_col] == 1:
+                                        self.terrain[tile_row, tile_col].highlight_attack = True
+                                        self.terrain[tile_row, tile_col].highligh_move = False
 
                         if terminated or truncated:
                             self.reset()

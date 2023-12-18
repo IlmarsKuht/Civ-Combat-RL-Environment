@@ -1,6 +1,3 @@
-from stable_baselines3.common.env_checker import check_env
-from stable_baselines3 import PPO
-
 from env import Civ6CombatEnv
 
 from unitTest import unitTest
@@ -21,7 +18,7 @@ def main():
     #     model = PPO("CnnPolicy", env, n_steps=1024, ent_coef=0.001, verbose=True, tensorboard_log='./logs', policy_kwargs=policy_kwargs)
     # model.learn(total_timesteps=4000, progress_bar=True)
     # model.save("./models/civ6_model")
-    env = Civ6CombatEnv(max_steps=100, render_mode="interactable")
+    env = Civ6CombatEnv(rows=8, columns=8, max_steps=100, render_mode="interactable", start_troops=1, fps=4)
     # check_env(env)
     # policy_kwargs = dict(
     #         features_extractor_class=CustomCNN,
@@ -31,10 +28,10 @@ def main():
     # model = PPO("CnnPolicy", env, verbose=True, policy_kwargs=policy_kwargs)
     # observation, info = env.reset()
     # while True:
-    #     actions, _ = model.predict(observation)
-    #     observation, reward, terminated, truncated, info = env.step(actions)
+    #     observation, reward, terminated, truncated, info = env.step(env.action_space.sample())
     #     if terminated or truncated:
     #         env.reset()
+
 
 
     env.start_interactable()
