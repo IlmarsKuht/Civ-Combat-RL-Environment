@@ -37,5 +37,5 @@ def main():
     env.start_interactable()
 
 if __name__ == "__main__":
-    unitTest()
+    # unitTest()
     main()

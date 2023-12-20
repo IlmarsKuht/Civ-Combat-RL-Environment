@@ -42,8 +42,10 @@ class Civ6CombatEnv(gym.Env):
         self.window = None
         self.clock = None
 
-        #FIGURE OUT WHAT ACTION SPACES TO USE
-        self.action_space = gym.spaces.Box(low=0, high=1, shape=(self.row_count*self.col_count,))
+        self.action_space = gym.spaces.Tuple((
+            gym.spaces.Tuple((gym.spaces.Discrete(rows), gym.spaces.Discrete(columns))), # Tuple for 'what to move'
+            gym.spaces.Tuple((gym.spaces.Discrete(rows), gym.spaces.Discrete(columns)))  # Tuple for 'where to move'
+        ))
         
         #Setting up observation space
         self.observation_space = gym.spaces.Box(low=-1, high=1, shape=(len(CnnChannels), self.col_count, self.row_count,), dtype=np.float32)
@@ -64,11 +66,9 @@ class Civ6CombatEnv(gym.Env):
         #additional information not returned as observation
         return {}
 
-    def step(self, action, troop=None):
-        #if troop not chosen get all troops with moves
-        troops = [troop] if troop else [player_troop for player_troop in self.player.troops if player_troop.moves > 0]
+    def step(self, action):
         #do the action
-        reward = self.terrain.action(action, troops=troops)
+        reward = self.terrain.action(action, self.player.troops)
 
         second_reward, terminated, truncated = self._after_step()
         reward += second_reward
@@ -129,11 +129,15 @@ class Civ6CombatEnv(gym.Env):
         troops = deque([troop for troop in bot.troops if troop.moves > 0])
         while troops:
             troop = troops.popleft()
-            possible_moves = self.terrain.get_reachable_pos([troop])
-            indices = np.where(possible_moves == 1)
-            indices = list(zip(indices[0], indices[1]))
-            random_move = random.choice(indices)
-            reward -= self.terrain.action(random_move, [troop])
+            possible_moves = self.terrain.get_reachable_pos(troop)
+            indices = np.where((possible_moves > 0) | (possible_moves == -2))
+            random_index = np.random.choice(range(len(indices[0])))
+
+            # Get the row and column of a random valid action
+            target_row = indices[0][random_index]
+            target_col = indices[1][random_index]
+
+            reward -= self.terrain.action(((troop.row, troop.col), (target_row, target_col)), troops)
             if self.render_mode in ["human", "interactable"]:
                 self._render_frame()
             #if still has moves, put it back
@@ -182,7 +186,7 @@ class Civ6CombatEnv(gym.Env):
             self.terrain = Terrain(self.row_count, self.col_count)
 
         #initalize the players
-        self.player = Player("JiaoJiao")
+        self.player = Player("Hero")
         self.bots = []
         for i in range(self.bot_count):
             self.bots.append(Player(f"{i}"))
@@ -326,6 +330,7 @@ class Civ6CombatEnv(gym.Env):
             troop.moves = troop.max_moves
 
 
+    #Some problem with this probably, have to press M two times to move
     def start_interactable(self):
         if self.render_mode != "interactable":
             raise RuntimeError("Render mode is not in interactable mode")
@@ -360,30 +365,29 @@ class Civ6CombatEnv(gym.Env):
                                     for tile_col in range(self.col_count):
                                         self.terrain[tile_row, tile_col].highlight_move = False
                                         self.terrain[tile_row, tile_col].highlight_attack = False
-                                _, _, terminated, truncated, _ = self.step((row, col), troop=troop_to_move)
+                                _, _, terminated, truncated, _ = self.step(((troop_to_move.row, troop_to_move.col), (row, col)))
                             else:
                                 #Clear the highlight_moves off the board
                                 for tile_row in range(self.row_count):
                                     for tile_col in range(self.col_count):
                                         self.terrain[tile_row, tile_col].highlight_move = False
                                         self.terrain[tile_row, tile_col].highlight_attack = False
-                                troop_to_move = None
+                            troop_to_move = None
 
                         #if friendly troop with moves
                         elif tile.troop and tile.troop.moves > 0 and tile.troop.player_id == self.player.id:
                             troop_to_move = tile.troop
                             #highlight_move the moves of the troop
-                            obs = self.terrain.get_reachable_pos([troop_to_move])
+                            obs = self.terrain.get_reachable_pos(troop_to_move)
+                            #Could vectorize these for loops using numpy vector operations
                             for tile_row in range(self.row_count):
                                 for tile_col in range(self.col_count):
-                                    self.terrain[tile_row, tile_col].highlight_move = True if obs[tile_row, tile_col] == 1 else False
-                            obs = self.terrain.range_attackable_pos([troop_to_move])
-                            for tile_row in range(self.row_count):
-                                for tile_col in range(self.col_count):
-                                    if obs[tile_row, tile_col] == 1:
+                                    if obs[tile_row, tile_col] > 0:
+                                        self.terrain[tile_row, tile_col].highlight_move = True
+                                        self.terrain[tile_row, tile_col].highlight_attack = False
+                                    elif obs[tile_row, tile_col] == -2:
                                         self.terrain[tile_row, tile_col].highlight_attack = True
-                                        self.terrain[tile_row, tile_col].highligh_move = False
-
+                                        self.terrain[tile_row, tile_col].highlight_move = False
                         if terminated or truncated:
                             self.reset()
                             terminated, truncated = False, False

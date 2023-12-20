@@ -131,84 +131,61 @@ class Terrain:
 
         return nearest_troop, min_moves, best_path
     
-    #this could probably be optimized
-    def get_reachable_pos(self, troops):
+
+    #returns a map where -2 means attackable, -1 means not reachable, 0 means obstructed, > 0 shows how many moves to get to there from curr pos
+    #DOES NOT FIND ARCHER ATTACK IF ARCHER ONLY HAS 1 MOVE LEFT, LOOP TWO MOVES IF IT'S AN ARCHER FOR FIND ATTACK
+    def get_reachable_pos(self, troop):
         observation = np.full((self.row_count, self.column_count), -1)
-        for troop in troops:
-            # Use a queue to perform a breadth-first search
-            queue = deque([(troop.row, troop.col, 0)])
-            max_moves = troop.moves
-            while queue:
-                curr_x, curr_y, moves = queue.popleft()
-                curr_tile = self.tiles[curr_x, curr_y]
-                curr_obs = observation[curr_x, curr_y]
+        # Use a queue to perform a breadth-first search
+        queue = deque([(troop.row, troop.col, 0)])
+        max_moves = troop.moves
+        while queue:
+            curr_x, curr_y, moves = queue.popleft()
+            curr_tile = self.tiles[curr_x, curr_y]
+            curr_obs = observation[curr_x, curr_y]
 
-                # Not reachable
-                if moves > max_moves or curr_tile.obstacle:
-                    continue
-                # Not improvable
-                if curr_obs > 0 and curr_obs < moves:
-                    continue
+            # Not reachable
+            if moves > max_moves or curr_tile.obstacle:
+                continue
+            # Not improvable
+            if (curr_obs >= 0 and curr_obs < moves) or curr_obs == -2:
+                continue
 
-                # Check the tile's troop and building
-                tile_troop = curr_tile.troop
-                tile_building = curr_tile.building
+            # Check the tile's troop and building
+            tile_troop = curr_tile.troop
+            tile_building = curr_tile.building
 
-                #Friendly troop (not starting position)
-                if (curr_x != troop.row or curr_y != troop.col) \
-                    and (tile_troop and tile_troop.player_id == troop.player_id):
-                    if observation[curr_x, curr_y] != 1:
-                        observation[curr_x, curr_y] = 0
-                    continue
+            #Friendly troop (not starting position)
+            if (curr_x != troop.row or curr_y != troop.col) \
+                and (tile_troop and tile_troop.player_id == troop.player_id):
+                observation[curr_x, curr_y] = 0
+                continue
 
-                #enemy troop or building
-                elif (tile_troop and tile_troop.player_id != troop.player_id) \
-                    or (tile_building and tile_building.player_id != troop.player_id):
-                    observation[curr_x, curr_y] = 1
-                    continue
-                #just move
+            #enemy troop or building
+            elif (tile_troop and tile_troop.player_id != troop.player_id) \
+                or (tile_building and tile_building.player_id != troop.player_id):
+                #if archer and long range or is close range
+                if (isinstance(troop, Archer) and moves == 2) or moves == 1:
+                    observation[curr_x, curr_y] = -2
+                #if is out of range
                 else:
-                    observation[curr_x, curr_y] = 1
-                    
+                    observation[curr_x, curr_y] = 0
+                continue
+            #just move
+            else:
+                observation[curr_x, curr_y] = moves
+                
 
-                directions = DIRECTIONS_EVEN if curr_x % 2 == 0 else DIRECTIONS_ODD
-                for dx, dy in directions:
-                    nx, ny = curr_x + dx, curr_y + dy
-                    if nx >= 0 and nx < self.row_count and ny >= 0 and ny < self.column_count:
-                        queue.append((nx, ny, moves+self.tiles[nx, ny].move_cost))
-        return observation
-    
-    #Important when adding new terrain!!!
-    #later need to update it so that it works wit hills and forests (blocked vision etc.)
-    def range_attackable_pos(self, troops): #Marks possible ranged attacks from current position
-        observation = np.full((self.row_count, self.column_count), -1)
-        for troop in troops:
-            # row, col, range
-            queue = deque([(troop.row, troop.col, 2)])
-            while queue:
-                curr_x, curr_y, range = queue.popleft()
-                #skip if no range left
-                if range < 0:
-                    continue
-
-                curr_tile = self.tiles[curr_x, curr_y]
-                tile_troop = curr_tile.troop
-                tile_building = curr_tile.building
-
-                # Mark if enemy
-                if (tile_troop and tile_troop.player_id != troop.player_id) \
-                    or (tile_building and tile_building.player_id != troop.player_id):
-                    observation[curr_x, curr_y] = 1
-                    
-
-                directions = DIRECTIONS_EVEN if curr_x % 2 == 0 else DIRECTIONS_ODD
-                for dx, dy in directions:
-                    nx, ny = curr_x + dx, curr_y + dy
-                    if nx >= 0 and nx < self.row_count and ny >= 0 and ny < self.column_count:
-                        queue.append((nx, ny, range-1))
+            directions = DIRECTIONS_EVEN if curr_x % 2 == 0 else DIRECTIONS_ODD
+            for dx, dy in directions:
+                nx, ny = curr_x + dx, curr_y + dy
+                if nx >= 0 and nx < self.row_count and ny >= 0 and ny < self.column_count:
+                    queue.append((nx, ny, moves+self.tiles[nx, ny].move_cost))
+        #Add that fortification removes all the moves
+        observation[troop.row, troop.col] = troop.max_moves
         return observation
 
-    
+    #Observations need to be redone and rethought, they make no sense now, especially the positions and the mask there
     def get_obs(self, player): 
         observation = np.full((self.row_count, self.column_count, len(CnnChannels)), -1, dtype=np.float32)
 
@@ -244,13 +221,13 @@ class Terrain:
                     if troop.player_id == player.id and troop.moves > 0:
                         #mark reachable positions
                         #this can be optimized by just passing all the troops once
-                        new_values = self.get_reachable_pos([troop])
+                        new_values = self.get_reachable_pos(troop)
                         
                         current_values = observation[:, :, CnnChannels.CAN_MOVE.value]
 
                         # Only update current_values where it's -1 and new_values is either 0 or 1
                         # or where current_values is 0 and new_values is 1
-                        mask = ((current_values == -1) & ((new_values == 1) | (new_values == 0))) | ((current_values == 0) & (new_values == 1))
+                        mask = ((current_values == -1) & ((new_values > 0) | (new_values == 0) | (new_values == -2))) | ((current_values == 0) & (new_values == 1))
                         current_values[mask] = new_values[mask]
                         observation[:, :, CnnChannels.CAN_MOVE.value] = current_values
 
@@ -281,56 +258,56 @@ class Terrain:
     #For interactive mode action is (row, col)
     #otherwise grid of all possibilities and mask masking the actions
     #probably the mask should be implemented in the terrain not in the environment? what do you think
-
-    #REMOVE THE PLAYER, WE DON'T NEED HIM, JUST STRAIGHT UP PASS IN THE TROOPS
-    def action(self, actions, troops):
+                
+    #Change everything back. Cannot attack unless you are in attacking range.
+    def action(self, action, troops):
         reward = Rewards.DEFAULT.value
-        no_model_action = False
-        path = []
-        
-        if len(actions) != 2:
-            #chooses a random move if model didn't have a move
-            target_row, target_col, no_model_action = self._get_action(actions, troops)
-        else:
-            #When a move is chosen
-            target_row = actions[0]
-            target_col = actions[1]
+        moves = None
 
-        #when getting a best path for archer, there is no path because he might not be able to move there, only shoot
-        #also shouldn't 
-        troop, moves, path = self.get_best_path(target_row, target_col, troops)  
+        (from_row, from_col), (to_row, to_col) = action
+
+        from_troop = self.tiles[from_row, from_col].troop
+
+        #Check if there is a troop and he has moves
+        if from_troop is None or from_troop.moves <= 0:
+            reward = Rewards.INVALID.value
+            from_troop, to_row, to_col, moves = self._get_action(troops)
+        #check if the destination is valid for that troop
+        else:
+            valid_actions = self.get_reachable_pos(from_troop)
+            moves = valid_actions[to_row, to_col]
+            if not (moves > 0 or moves == -2):
+                reward = Rewards.INVALID.value
+                from_troop, to_row, to_col, moves = self._get_action(troops)  
         
-        target_troop = self.tiles[target_row, target_col].troop
-        target_building = self.tiles[target_row, target_col].building
+        to_troop = self.tiles[to_row, to_col].troop
+        to_building = self.tiles[to_row, to_col].building
 
         #fortify if the same tile it's standing on
-        if target_row == troop.row and target_col == troop.col:
-            reward = self._fortify(troop)
-        #just move
-        elif (target_troop is None and target_building is None) or \
-            (target_building and target_building.player_id == troop.player_id):
-            reward = self._move(target_row, target_col, troop)
-            troop.moves -= moves
-        #move next to target (if needed) and attack
-        elif isinstance(troop, Warrior):
-            #no reward update because already attacking
-            self._move(path[-2][0], path[-2][1], troop)
-            #then attack
-            if target_building:
-                reward = self._attack(troop, target_building)
-            elif target_troop:
-                reward = self._attack(troop, target_troop)
-        elif isinstance(troop, Archer):
+        if from_row == to_row and from_col == to_col:
+            #FORTIFY SHOULD BE A TROOP METHOD, DOESN'T MAKE SENSE THAT THE TERRAIN HAS THIS, SAME FOR MOVE ATTACK ETC..
+            #WE CAN KEEP THESE METHODS FOR TERRAIN, BUT THEY WILL CALL THE TROOP FORTIFY, IF THEY NEED TO DO SOMETHING IN TERRAIN SO THEY CAN STILL DO IT
+            reward = self._fortify(from_troop)
+        #if nothing or friendly building
+        elif (to_troop is None and to_building is None) or \
+            (to_building and to_building.player_id == from_troop.player_id):
+            reward = self._move(to_row, to_col, from_troop)
+            from_troop.moves -= moves
+        #Warrior attacks
+        elif isinstance(from_troop, Warrior):
+            #if troop in building, it only attack building
+            if to_building:
+                reward = self._attack(from_troop, to_building)
+            elif to_troop:
+                reward = self._attack(from_troop, to_troop)
+        #Archer attacks
+        elif isinstance(from_troop, Archer):
             #make archer not get damaged attacking
-            if target_building:
-                reward = self._attack(troop, target_building)
-            elif target_troop:
-                reward = self._attack(troop, target_troop)
-                
-
-        #give bad reward and choose
-        if no_model_action:
-            reward = Rewards.INVALID.value
+            #if troop in building, it only attack building
+            if to_building:
+                reward = self._attack(from_troop, to_building)
+            elif to_troop:
+                reward = self._attack(from_troop, to_troop)
 
         return reward
     
@@ -340,34 +317,32 @@ class Terrain:
                     if 0 <= target_row + dx < self.row_count and 0 <= target_col + dy < self.column_count]
         return (row, col) in adjacent_cells
     
-    def _get_action(self, actions, troops):
-        no_model_action = False
+    def _get_action(self, troops):
 
-        #get all valid actions
-        mask = self.get_reachable_pos(troops).flatten()
-        attack_mask = self.range_attackable_pos(troops).flatten()
-        #combine masks
-        temp_mask = attack_mask > mask
-        mask[temp_mask] = attack_mask[temp_mask]
+        #filter troops which have moves
+        filtered_troops = [troop for troop in troops if troop.moves > 0]
 
-        #mask invalid actions
-        actions = actions*mask
-        
-        valid_indices = np.where(actions != 0)[0]
+        #choose a troop at random
+        troop = np.random.choice(filtered_troops)
 
-        # If no valid actions from model.
-        if len(valid_indices) == 0:
-            valid_indices = np.where(mask == 1)[0]
-            no_model_action = True
+        #get all valid actions (2d array with 1 indicating valid action)
+        actions = self.get_reachable_pos(troop)
 
-        valid_actions = actions[valid_indices]
-        max_action_index = np.argmax(valid_actions)
+        # Find the indices where actions are valid
+        valid_indices = np.where(actions >= 1)
 
-        # Map this back to the original array's indices.
-        action = valid_indices[max_action_index]
+        # Choose a random index from the valid indices
+        # Note: valid_indices is a tuple of arrays, one for each dimension
+        random_index = np.random.choice(range(len(valid_indices[0])))
 
-        target_row, target_col = divmod(action, self.row_count) 
-        return target_row, target_col, no_model_action
+        # Get the row and column of a random valid action
+        target_row = valid_indices[0][random_index]
+        target_col = valid_indices[1][random_index]
+
+        #Get the moves required to get to this position
+        moves = actions[target_row, target_col]
+
+        return troop, target_row, target_col, moves
        
     def _fortify(self, troop):
         #Fortification bonus calculations
