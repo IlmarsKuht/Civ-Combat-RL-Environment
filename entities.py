@@ -1,6 +1,9 @@
 import pygame
+from abc import ABC, abstractmethod
+import random
+import math
 
-from options import HEX_SIZE, Colors, FortifiedBonus, PLAYER_COLOR, BOT_COLORS, MARGIN
+from options import HEX_SIZE, Colors, FortifiedBonus, PLAYER_COLOR, BOT_COLORS, MARGIN, Rewards
 
 WARRIOR_IMAGE = pygame.image.load('./images/warrior.png')
 WARRIOR_IMAGE = pygame.transform.scale(WARRIOR_IMAGE, (HEX_SIZE/2, HEX_SIZE/2))  
@@ -24,7 +27,7 @@ class Player:
         self.troops = []
         self.buildings = []
 
-class Entity:
+class Entity(ABC):
     def __init__(self, health, max_health, power, player_id, row, col, image, hp_power_loss=0):
         self.health = health
         self.max_health = max_health
@@ -48,6 +51,18 @@ class Entity:
         #if player then higlight it (draw outline)
         if self.player_id == player_id:
             pygame.draw.circle(window, PLAYER_COLOR, (self.x, self.y), HEX_SIZE/15, 2)
+
+    @abstractmethod
+    def kill(self):
+        """
+        What happens when this Entity is killed, rewards and other things.
+        """
+
+    @abstractmethod
+    def remove_from_tiles(self, tiles):
+        """
+        removes the entity from tiles array
+        """
     
     def _draw_attributes(self, window):
         # Health Bar
@@ -72,7 +87,7 @@ class Entity:
 
 
 
-class Troop(Entity):
+class Troop(Entity, ABC):
     def __init__(self, moves, max_moves, health, max_health, power, player_id, row, col, image, fortified, hp_power_loss=0):
         super().__init__(health, max_health, power, player_id, row, col, image, hp_power_loss)
         self.moves = moves
@@ -111,10 +126,106 @@ class Troop(Entity):
         power_y = self.y-HEX_SIZE/3
         _draw_centered(window, power_text, self.x, power_y)
 
+    def fortify(self):
+        #Fortification bonus calculations
+        if self.moves == self.max_moves:
+            if self.fortified == FortifiedBonus.NONE:
+                self.fortified = FortifiedBonus.FIRST
+                self.power += FortifiedBonus.FIRST.value
+            elif self.fortified == FortifiedBonus.FIRST:
+                self.fortified = FortifiedBonus.SECOND
+                self.power -= FortifiedBonus.FIRST.value
+                self.power += FortifiedBonus.SECOND.value
+        #only update moves at the end, else will mess up the calculation above
+        self.moves = 0
+        return Rewards.DEFAULT.value
+
+    def move(self, new_row, new_col, moves):
+        self._remove_fortify_bonus()
+
+        self.moves -= moves
+        self.row = new_row
+        self.col = new_col        
+        return Rewards.DEFAULT.value
+    
+    def remove_from_tiles(self, tiles):
+        tiles[self.row, self.col].troop = None
+
+    def kill(self):
+        self.health = 0
+        return Rewards.KILL_TROOP.value
+
+    @abstractmethod
+    def attack(self, defender):
+        """
+        Implement seperate attack method for each Troop type to deal the damage
+        """
+    
+    def _remove_fortify_bonus(self):
+        self.power -= self.fortified.value
+        self.fortified = FortifiedBonus.NONE
+
+    def _update_hp_power_loss(self):
+        self.power += self.hp_power_loss
+        self.hp_power_loss = round(10 - (self.health/10))
+        self.power -= self.hp_power_loss
+
+    @abstractmethod
+    def _handle_attack_result(self, defender):
+        """
+        Implement method that handles the result of the fight after each troop has taken damage"""
+
 
 class Warrior(Troop):
     def __init__(self, moves, max_moves, health, max_health, power, player_id, row, col, fortified : FortifiedBonus=FortifiedBonus.NONE, hp_power_loss=0):
         super().__init__(moves, max_moves, health, max_health, power, player_id, row, col, WARRIOR_IMAGE, fortified, hp_power_loss)
+
+    def attack(self, defender):
+        self.moves = 0
+        self._remove_fortify_bonus()
+        #get the defending and attacking troops power
+        def_power = defender.power 
+        attack_power = self.power
+
+        #formula: Damage(HP)=30*e^{0.04*StrengthDifference}*randomBetween(0.8-1.2)}
+        rand = random.uniform(0.8, 1.2)
+        damage_to_defender = 30*math.exp(0.04 * (attack_power-def_power)) * rand
+        damage_to_attacker = 30*math.exp(0.04 * (def_power-attack_power)) * rand
+        defender.health -= damage_to_defender
+        self.health -= damage_to_attacker
+        
+        self._update_hp_power_loss()
+        if isinstance(defender, Troop):
+            defender._update_hp_power_loss()
+
+        reward = self._handle_attack_result(defender)
+
+        return reward
+    
+    def _handle_attack_result(self, defender):
+        reward = Rewards.ATTACK.value
+        unit_to_kill = None
+
+        if defender.health <= 0 and self.health <= 0:
+            # If both units are dead, kill the unit with the lowest health.
+            unit_to_kill = min(defender.health, self.health)
+            # Give a little health to surviver
+            if unit_to_kill == defender:
+                self.health = 1
+            else:
+                defender.health = 1
+
+        elif defender.health <= 0:
+            unit_to_kill = defender
+    
+        elif self.health <= 0:
+            unit_to_kill = self   
+
+        # Finally, kill the designated unit and return the reward.
+        if unit_to_kill:
+            kill_reward = unit_to_kill.kill()
+            reward += kill_reward if unit_to_kill==defender else -kill_reward
+        return reward
 
 
 class Archer(Troop):
@@ -122,10 +233,41 @@ class Archer(Troop):
         super().__init__(moves, max_moves, health, max_health, power, player_id, row, col, ARCHER_IMAGE, fortified, hp_power_loss)
         self.range = range
 
+    def attack(self, defender):
+        self.moves = 0
+        self._remove_fortify_bonus()
+        #get the defending and attacking troops power
+        def_power = defender.power 
+        attack_power = self.power
+
+        #formula: Damage(HP)=30*e^{0.04*StrengthDifference}*randomBetween(0.8-1.2)}
+        rand = random.uniform(0.8, 1.2)
+        damage_to_defender = 30*math.exp(0.04 * (attack_power-def_power)) * rand
+
+        defender.health -= damage_to_defender
+        
+        if isinstance(defender, Troop):
+            defender._update_hp_power_loss()
+
+        reward = self._handle_attack_result(defender)
+
+        return reward
+    
+    def _handle_attack_result(self, defender):
+        reward = Rewards.ATTACK.value
+
+        if defender.health <= 0:
+            reward += defender.kill()
+
+        return reward
+
 class Center(Entity):
     def __init__(self, health, max_health, power, player_id, row, col, hp_power_loss=0):
         super().__init__(health, max_health, power, player_id, row, col, CITY_CENTER_IMAGE, hp_power_loss)
 
-
-
-
+    def kill(self):
+        self.health = 0
+        return Rewards.KILL_CITY.value
+    
+    def remove_from_tiles(self, tiles):
+        tiles[self.row, self.col].building = None

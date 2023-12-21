@@ -98,12 +98,12 @@ class Civ6CombatEnv(gym.Env):
         if ai_turn:
             self._reset_moves(self.player)
             for bot in self.bots:
-                reward += self._ai_sim(bot)
+                #THIS DOESN'T WORK IF THERE ARE MULTIPLE BOTS, ONLY SHOULD GIVE NEGATIVE REWARD IF PLAYER IS ATTACKED, NOT OTHER BOTS
+                reward -= self._ai_sim(bot)
                 self._reset_moves(bot)
+                reward += self._cleanup(bot)
 
             reward -= self._cleanup(self.player)
-            for bot in self.bots:
-                reward += self._cleanup(bot)
 
         self.curr_steps += 1
         truncated = self.curr_steps >= self.max_steps
@@ -137,7 +137,7 @@ class Civ6CombatEnv(gym.Env):
             target_row = indices[0][random_index]
             target_col = indices[1][random_index]
 
-            reward -= self.terrain.action(((troop.row, troop.col), (target_row, target_col)), troops)
+            reward += self.terrain.action(((troop.row, troop.col), (target_row, target_col)), troops)
             if self.render_mode in ["human", "interactable"]:
                 self._render_frame()
             #if still has moves, put it back
@@ -147,19 +147,22 @@ class Civ6CombatEnv(gym.Env):
     
     #removes dead troops and buildings from players
     def _cleanup(self, player : Player):
-        #if eliminating a CIV you also kill all the troops so bonus reward
         reward = 0
+        #don't count reward for regular removals, reward already counted before this
         for building in player.buildings:
             if building.health <= 0:
                 player.buildings.remove(building)
+        #if eliminating a CIV you also kill all the troops so bonus reward
         if len(player.buildings) == 0:
-            reward += self.terrain._cleanup(player.id)
+            self.terrain._cleanup(player.troops)
+            for troop in player.troops:
+                reward += troop.kill()
             player.troops = []
         else: 
             for troop in player.troops:
                 if troop.health <= 0:
                     player.troops.remove(troop)
-        return reward
+        return reward 
 
 
 

@@ -288,18 +288,20 @@ class Terrain:
             #FORTIFY SHOULD BE A TROOP METHOD, DOESN'T MAKE SENSE THAT THE TERRAIN HAS THIS, SAME FOR MOVE ATTACK ETC..
             #WE CAN KEEP THESE METHODS FOR TERRAIN, BUT THEY WILL CALL THE TROOP FORTIFY, IF THEY NEED TO DO SOMETHING IN TERRAIN SO THEY CAN STILL DO IT
             reward = self._fortify(from_troop)
-        #if nothing or friendly building
+
+        #if nothing or friendly building just move
         elif (to_troop is None and to_building is None) or \
             (to_building and to_building.player_id == from_troop.player_id):
-            reward = self._move(to_row, to_col, from_troop)
-            from_troop.moves -= moves
+            reward = self._move(to_row, to_col, from_troop, moves)
+
         #Warrior attacks
         elif isinstance(from_troop, Warrior):
-            #if troop in building, it only attack building
+            #if troop in building, attacker attack the building not the troop
             if to_building:
                 reward = self._attack(from_troop, to_building)
             elif to_troop:
                 reward = self._attack(from_troop, to_troop)
+
         #Archer attacks
         elif isinstance(from_troop, Archer):
             #make archer not get damaged attacking
@@ -345,112 +347,27 @@ class Terrain:
         return troop, target_row, target_col, moves
        
     def _fortify(self, troop):
-        #Fortification bonus calculations
-        if troop.moves == troop.max_moves:
-            if troop.fortified == FortifiedBonus.NONE:
-                troop.fortified = FortifiedBonus.FIRST
-                troop.power += FortifiedBonus.FIRST.value
-            elif troop.fortified == FortifiedBonus.FIRST:
-                troop.fortified = FortifiedBonus.SECOND
-                troop.power -= FortifiedBonus.FIRST.value
-                troop.power += FortifiedBonus.SECOND.value
-        #increase the power of the troop while fortified
-        reward = Rewards.DEFAULT.value
-        #only update moves at the end, else will mess up the calculation above
-        troop.moves = 0
-        return reward
+        return troop.fortify()
     
-    def _remove_fortify_bonus(self, troop):
-        troop.power -= troop.fortified.value
-        troop.fortified = FortifiedBonus.NONE
-
-    def _move(self, new_row, new_col, troop):
-        #don't set the moves to zero, instead minus the moves made by the player so he can move and attack
-        self._remove_fortify_bonus(troop)
-
+    def _move(self, new_row, new_col, troop, moves):
         self.tiles[troop.row][troop.col].troop = None
         self.tiles[new_row][new_col].troop = troop
-        troop.row = new_row
-        troop.col = new_col
-
-        reward = Rewards.DEFAULT.value
-        return reward
+        
+        return troop.move(new_row, new_col, moves)
 
     def _attack(self, attacker, defender):
-        attacker.moves = 0
-        self._remove_fortify_bonus(attacker)
-        #get the defending and attacking troops power
-        def_power = defender.power 
-        attack_power = attacker.power
-
-        #formula: Damage(HP)=30*e^{0.04*StrengthDifference}*randomBetween(0.8-1.2)}
-        rand = random.uniform(0.8, 1.2)
-        damage_to_defender = 30*math.exp(0.04 * (attack_power-def_power)) * rand
-        damage_to_attacker = 30*math.exp(0.04 * (def_power-attack_power)) * rand
-        defender.health -= damage_to_defender
-        attacker.health -= damage_to_attacker
-        
-        self._update_hp_power_loss(attacker)
-        if isinstance(defender, Troop):
-            self._update_hp_power_loss(defender)
-
-        reward = self._handle_fight(attacker, defender)
-
-        return reward
-    
-    def _update_hp_power_loss(self, troop):
-        troop.power += troop.hp_power_loss
-        troop.hp_power_loss = round(10 - (troop.health/10))
-        troop.power -= troop.hp_power_loss
-    
-    def _handle_fight(self, attacker, defender):
-        move_row, move_col = None, None
-        reward = Rewards.ATTACK.value
-        unit_to_kill = None
-
-        if defender.health <= 0 and attacker.health <= 0:
-            # If both units are dead, kill the unit with the lowest health.
-            unit_to_kill = min(defender, attacker, key=lambda troop: troop.health)
-            # Give a little health to surviver
-            if unit_to_kill == defender:
-                attacker.health = 1
-                move_row, move_col = defender.row, defender.col
-            else:
-                defender.health = 1
-
+        reward = attacker.attack(defender)
+        if attacker.health <= 0:
+            attacker.remove_from_tiles(self.tiles)
         elif defender.health <= 0:
-            unit_to_kill = defender
-            move_row, move_col = defender.row, defender.col
-    
-        elif attacker.health <= 0:
-            unit_to_kill = attacker   
-
-        # Finally, kill the designated unit and return the reward.
-        if unit_to_kill:
-            kill_reward = self._kill_entity(unit_to_kill)
-            reward += kill_reward if unit_to_kill==defender else -kill_reward
-        #if attacker killed defender, move attacker
-        if move_row is not None:
-            self._move(move_row, move_col, attacker)
-        return reward
-
-
-    def _kill_entity(self, entity):
-        if isinstance(entity, Troop):
-            self.tiles[entity.row, entity.col].troop = None
-            reward = Rewards.KILL_TROOP.value
-        #only works for center...
-        elif isinstance(entity, Center):
-            self.tiles[entity.row, entity.col].building = None
-            reward = Rewards.KILL_CITY.value
+            to_row = defender.row
+            to_col = defender.col
+            defender.remove_from_tiles(self.tiles)
+            #move the attacker to defender position, if attacker is warrior
+            if isinstance(attacker, Warrior):
+                attacker.move(to_row, to_col, 0)
         return reward
     
-    def _cleanup(self, id):
-        reward = 0
-        for row in self.tiles:
-            for tile in row:
-                if tile.troop and tile.troop.player_id==id:
-                    reward += self._kill_entity(tile.troop)
-                if tile.building and tile.building.player_id==id:
-                    reward += self._kill_entity(tile.building)
-        return reward
+    def _cleanup(self, entities):
+        for entity in entities:
+            entity.remove_from_tiles(self.tiles)
