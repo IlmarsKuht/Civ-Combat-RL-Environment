@@ -92,44 +92,6 @@ class Terrain:
             tiles.append(rows)
         return np.array(tiles)
 
-
-    def get_best_path(self, row, col, troops):
-        nearest_troop = None
-        min_moves = float('inf')
-        best_path = []
-
-        for troop in troops:
-            #x, y, movement_points, moves used, path to tile
-            queue = deque([(troop.row, troop.col, troop.moves, 0, [(troop.row, troop.col)])])
-
-            while queue:
-                curr_x, curr_y, movement_left, moves, path = queue.popleft()
-                # Not reachable
-                if movement_left < 0 or self.tiles[curr_x, curr_y].obstacle:
-                    continue
-
-                # Reached target
-                if curr_x == row and curr_y == col:
-                    if moves < min_moves:
-                        min_moves = moves
-                        nearest_troop = troop
-                        best_path = path
-
-                # Can't move to here, don't look
-                elif (curr_x != troop.row or curr_y != troop.col) and (self.tiles[curr_x, curr_y].troop or \
-                    (self.tiles[curr_x, curr_y].building and self.tiles[curr_x, curr_y].building.player_id != troop.player_id)):
-                    continue
-
-                directions = DIRECTIONS_EVEN if curr_x % 2 == 0 else DIRECTIONS_ODD
-                for dx, dy in directions:
-                    nx, ny = curr_x + dx, curr_y + dy
-                    if nx >= 0 and nx < self.row_count and ny >= 0 and ny < self.column_count:
-                        new_path = path + [(nx, ny)]
-                        queue.append((nx, ny, movement_left - 1, moves+1, new_path))
-
-        return nearest_troop, min_moves, best_path
-    
-
     #Observations need to be redone and rethought, they make no sense now, especially the positions and the mask there
     def get_obs(self, player): 
         observation = np.full((self.row_count, self.column_count, len(CnnChannels)), -1, dtype=np.float32)
@@ -178,6 +140,9 @@ class Terrain:
 
 
         #normalize power and health between 0 and 1
+        #I don't need to do all of this, it's up to the guys who do reinforcment learning to do whatever
+        #they want with the observations, make it much more simple, don't need normalization.
+        #Don't need complicated stuff. Rethink all of these observations.
         max_power = max([power for power, _ in troop_powers] + [power for power, _ in building_powers])
         max_health = max([health for health, _ in troop_healths] + [health for health, _ in building_healths])
         for power, (row, col) in troop_powers:

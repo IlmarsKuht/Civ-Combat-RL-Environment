@@ -176,7 +176,7 @@ class Troop(Entity, ABC):
         """
         Implement seperate attack method for each Troop type to deal the damage
         """
-    #can pass through team troops, doesn't attack warrior when has two moves and is next to city
+    #can pass through team and enemy troops
     def get_reachable_pos(self, tiles):
         observation = np.full((len(tiles), len(tiles[0])), -1)
         queue = deque([(self.row, self.col, 0)])
@@ -187,13 +187,11 @@ class Troop(Entity, ABC):
 
         while queue:
             curr_x, curr_y, moves = queue.popleft()
-            if not is_valid_tile(curr_x, curr_y):
-                continue
 
             curr_tile = tiles[curr_x, curr_y]
             curr_obs = observation[curr_x, curr_y]
 
-            if curr_tile.obstacle or (curr_obs >= 0 and curr_obs < moves) or curr_obs == -2 or curr_obs == 0:
+            if (curr_obs >= 0 and curr_obs < moves) or curr_obs == -2 or curr_obs == 0 or curr_tile.obstacle:
                 continue
 
             tile_troop = curr_tile.troop
@@ -201,8 +199,10 @@ class Troop(Entity, ABC):
 
             if tile_troop and tile_troop.player_id == self.player_id and (curr_x, curr_y) != (self.row, self.col):
                 observation[curr_x, curr_y] = 0
+                continue
             elif (tile_troop and tile_troop.player_id != self.player_id) or (tile_building and tile_building.player_id != self.player_id):
                 observation[curr_x, curr_y] = -2 if moves <= self.attack_range else 0
+                continue
             elif moves <= self.moves:
                 observation[curr_x, curr_y] = moves
 
