@@ -1,14 +1,13 @@
 WORKING NOW:
 
 DO branching for the next features
-
-Get_best_path function doesn't work for atchers ranged attack, because an archer might not be able to go there, only attack
+Should the troops be constant amount or not. Maybe I should go on the discord and talk with them about this.
+Go on gymnasium if there are other similar games with changing inputs.
+Well I guess it's not changing, you could just input one troop at a time until all troops are out of moves.
 
 
 
 HIGH PRIORITY:
-
-After my move it is extremely slow, find out why (only for interactable mode, not human)
 
 ADD UNIT TESTS to test observation and edge cases (out of map, no moves, etc...)
 
@@ -16,14 +15,8 @@ MEDIUM PRIORITY:
 
 observations could return a value with row and col, instead of the whole grid? could save time, becasue most of the time most of the grid will be empty
 
-Change attackable tiles to red color
-
-After getting movable tiles, go through them and get all attackable tiles within range
-
 Cities also suffer and help from combat statistic (update hp power loss)
 CHECK IT BECAUSE WITH CURRENT CALCULATIONS IT GETS A +10 COMBAT BONUS AT FULL HP, THAT'S STUPID
-
-Instead of attack animation I could just highilght the square which is attacking and which is defending in the current step? Could be nice
 
 Document my code how it was documented professionally in the video
 Hard to see anythign when unit is in the city
@@ -37,7 +30,6 @@ Different Terrain
 Terrain, Health, combat etc. buffs and DEBUFFS
 
 Probably move the render functions somewhere else?
-Make troop and building have the same parent class (x, y, health ,power) etc.. and then inherit
 add healing when fortified
 Just go through the wiki and add everything about combat 
 Add unit training

@@ -101,7 +101,7 @@ class Civ6CombatEnv(gym.Env):
                 #THIS DOESN'T WORK IF THERE ARE MULTIPLE BOTS, ONLY SHOULD GIVE NEGATIVE REWARD IF PLAYER IS ATTACKED, NOT OTHER BOTS
                 reward -= self._ai_sim(bot)
                 self._reset_moves(bot)
-                reward += self._cleanup(bot)
+                self._cleanup(bot)
 
             reward -= self._cleanup(self.player)
 
@@ -137,7 +137,15 @@ class Civ6CombatEnv(gym.Env):
             target_row = indices[0][random_index]
             target_col = indices[1][random_index]
 
-            reward += self.terrain.action(((troop.row, troop.col), (target_row, target_col)), troops)
+            target_troop = self.terrain.tiles[target_row, target_col].troop
+            target_building = self.terrain.tiles[target_row, target_col].building
+
+            curr_reward = self.terrain.action(((troop.row, troop.col), (target_row, target_col)), troops)
+            #We only care about rewards when the AI attacks the player
+            if (target_troop and target_troop.player_id == self.player.id or \
+                target_building and target_building.player_id == self.player.id):
+                reward += curr_reward
+
             if self.render_mode in ["human", "interactable"]:
                 self._render_frame()
             #if still has moves, put it back
@@ -332,8 +340,6 @@ class Civ6CombatEnv(gym.Env):
         for troop in player.troops:
             troop.moves = troop.max_moves
 
-
-    #Some problem with this probably, have to press M two times to move
     def start_interactable(self):
         if self.render_mode != "interactable":
             raise RuntimeError("Render mode is not in interactable mode")

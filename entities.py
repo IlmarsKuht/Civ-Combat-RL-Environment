@@ -104,7 +104,6 @@ class Troop(Entity, ABC):
         self.max_moves = max_moves
         self.fortified = fortified
 
-    #Troop overrides Entities _draw_attributes
     def _draw_attributes(self, window):
         # Health Bar
         health_bar_width = HEX_SIZE/2

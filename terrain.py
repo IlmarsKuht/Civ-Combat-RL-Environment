@@ -164,12 +164,7 @@ class Terrain:
         for row in self.tiles:
             for tile in row:
                 tile.draw(window, player_id)
-
-    #For interactive mode action is (row, col)
-    #otherwise grid of all possibilities and mask masking the actions
-    #probably the mask should be implemented in the terrain not in the environment? what do you think
                 
-    #Change everything back. Cannot attack unless you are in attacking range.
     def action(self, action, troops):
         reward = Rewards.DEFAULT.value
         moves = None
