@@ -129,7 +129,7 @@ class Civ6CombatEnv(gym.Env):
         troops = deque([troop for troop in bot.troops if troop.moves > 0])
         while troops:
             troop = troops.popleft()
-            possible_moves = self.terrain.get_reachable_pos(troop)
+            possible_moves = troop.get_reachable_pos(self.terrain.tiles)
             indices = np.where((possible_moves > 0) | (possible_moves == -2))
             random_index = np.random.choice(range(len(indices[0])))
 
@@ -156,7 +156,7 @@ class Civ6CombatEnv(gym.Env):
         if len(player.buildings) == 0:
             self.terrain._cleanup(player.troops)
             for troop in player.troops:
-                reward += troop.kill()
+                reward += troop.kill(self.terrain.tiles)
             player.troops = []
         else: 
             for troop in player.troops:
@@ -231,7 +231,7 @@ class Civ6CombatEnv(gym.Env):
                 self._create_warrior(player, 2, 2, 100, 100, 55, troop_row, troop_col)
             positions = self._get_troop_positions(row, col, troop_amount)
             for troop_row, troop_col in positions:
-                self._create_archer(player, 2, 2, 2, 100, 100, 55, troop_row, troop_col)
+                self._create_archer(player, 2, 2, 100, 100, 55, troop_row, troop_col)
                 
 
     def close(self):
@@ -261,13 +261,13 @@ class Civ6CombatEnv(gym.Env):
         y += font_size
         self.window.blit(win_losses_text, (x, y))
         
-    
+     
     def _create_warrior(self, player : Player, moves, max_moves, health, max_health, power, row, col):
         self.terrain[row][col].troop = Warrior(moves, max_moves, health, max_health, power,  player.id, row, col)
         player.troops.append(self.terrain[row][col].troop)
     
-    def _create_archer(self, player : Player, range, moves, max_moves, health, max_health, power, row, col):
-        self.terrain[row][col].troop = Archer(range, moves, max_moves, health, max_health, power,  player.id, row, col)
+    def _create_archer(self, player : Player, moves, max_moves, health, max_health, power, row, col):
+        self.terrain[row][col].troop = Archer(moves, max_moves, health, max_health, power,  player.id, row, col)
         player.troops.append(self.terrain[row][col].troop)
 
     def _create_center(self, player : Player, health, max_health, power, row, col):
@@ -381,7 +381,7 @@ class Civ6CombatEnv(gym.Env):
                         elif tile.troop and tile.troop.moves > 0 and tile.troop.player_id == self.player.id:
                             troop_to_move = tile.troop
                             #highlight_move the moves of the troop
-                            obs = self.terrain.get_reachable_pos(troop_to_move)
+                            obs = troop_to_move.get_reachable_pos(self.terrain.tiles)
                             #Could vectorize these for loops using numpy vector operations
                             for tile_row in range(self.row_count):
                                 for tile_col in range(self.col_count):

@@ -2,8 +2,11 @@ import pygame
 from abc import ABC, abstractmethod
 import random
 import math
+from collections import deque
+import numpy as np
 
-from options import HEX_SIZE, Colors, FortifiedBonus, PLAYER_COLOR, BOT_COLORS, MARGIN, Rewards
+from options import HEX_SIZE, Colors, FortifiedBonus, PLAYER_COLOR, BOT_COLORS, MARGIN, Rewards, \
+                    DIRECTIONS_ODD, DIRECTIONS_EVEN
 
 WARRIOR_IMAGE = pygame.image.load('./images/warrior.png')
 WARRIOR_IMAGE = pygame.transform.scale(WARRIOR_IMAGE, (HEX_SIZE/2, HEX_SIZE/2))  
@@ -28,7 +31,7 @@ class Player:
         self.buildings = []
 
 class Entity(ABC):
-    def __init__(self, health, max_health, power, player_id, row, col, image, hp_power_loss=0):
+    def __init__(self, health, max_health, power, player_id, row, col, image, hp_power_loss, attack_range):
         self.health = health
         self.max_health = max_health
         self.power = power
@@ -37,6 +40,7 @@ class Entity(ABC):
         self.col = col
         self.image = image
         self.hp_power_loss = hp_power_loss
+        self.attack_range = attack_range
     
     def draw(self, window, player_id):
         #Center coordinates of the middle of the tile
@@ -94,8 +98,8 @@ class Entity(ABC):
 
 
 class Troop(Entity, ABC):
-    def __init__(self, moves, max_moves, health, max_health, power, player_id, row, col, image, fortified, hp_power_loss=0):
-        super().__init__(health, max_health, power, player_id, row, col, image, hp_power_loss)
+    def __init__(self, moves, max_moves, health, max_health, power, player_id, row, col, image, fortified, hp_power_loss, attack_range):
+        super().__init__(health, max_health, power, player_id, row, col, image, hp_power_loss, attack_range)
         self.moves = moves
         self.max_moves = max_moves
         self.fortified = fortified
@@ -172,6 +176,45 @@ class Troop(Entity, ABC):
         """
         Implement seperate attack method for each Troop type to deal the damage
         """
+    #can pass through team troops, doesn't attack warrior when has two moves and is next to city
+    def get_reachable_pos(self, tiles):
+        observation = np.full((len(tiles), len(tiles[0])), -1)
+        queue = deque([(self.row, self.col, 0)])
+        end_condition = max(self.moves, self.attack_range)
+
+        def is_valid_tile(x, y):
+            return 0 <= x < len(tiles) and 0 <= y < len(tiles[0])
+
+        while queue:
+            curr_x, curr_y, moves = queue.popleft()
+            if not is_valid_tile(curr_x, curr_y):
+                continue
+
+            curr_tile = tiles[curr_x, curr_y]
+            curr_obs = observation[curr_x, curr_y]
+
+            if curr_tile.obstacle or (curr_obs >= 0 and curr_obs < moves) or curr_obs == -2 or curr_obs == 0:
+                continue
+
+            tile_troop = curr_tile.troop
+            tile_building = curr_tile.building
+
+            if tile_troop and tile_troop.player_id == self.player_id and (curr_x, curr_y) != (self.row, self.col):
+                observation[curr_x, curr_y] = 0
+            elif (tile_troop and tile_troop.player_id != self.player_id) or (tile_building and tile_building.player_id != self.player_id):
+                observation[curr_x, curr_y] = -2 if moves <= self.attack_range else 0
+            elif moves <= self.moves:
+                observation[curr_x, curr_y] = moves
+
+            if moves < end_condition:
+                directions = DIRECTIONS_EVEN if curr_x % 2 == 0 else DIRECTIONS_ODD
+                for dx, dy in directions:
+                    nx, ny = curr_x + dx, curr_y + dy
+                    if is_valid_tile(nx, ny):
+                        queue.append((nx, ny, moves + tiles[nx, ny].move_cost))
+
+        observation[self.row, self.col] = self.max_moves
+        return observation
     
     def _remove_fortify_bonus(self):
         self.power -= self.fortified.value
@@ -189,8 +232,8 @@ class Troop(Entity, ABC):
 
 
 class Warrior(Troop):
-    def __init__(self, moves, max_moves, health, max_health, power, player_id, row, col, fortified : FortifiedBonus=FortifiedBonus.NONE, hp_power_loss=0):
-        super().__init__(moves, max_moves, health, max_health, power, player_id, row, col, WARRIOR_IMAGE, fortified, hp_power_loss)
+    def __init__(self, moves, max_moves, health, max_health, power, player_id, row, col, fortified : FortifiedBonus=FortifiedBonus.NONE, hp_power_loss=0, attack_range=1):
+        super().__init__(moves, max_moves, health, max_health, power, player_id, row, col, WARRIOR_IMAGE, fortified, hp_power_loss, attack_range)
 
     def attack(self, defender, tiles):
         self.moves = 0
@@ -238,9 +281,8 @@ class Warrior(Troop):
 
 
 class Archer(Troop):
-    def __init__(self, range, moves, max_moves, health, max_health, power, player_id, row, col, fortified : FortifiedBonus=FortifiedBonus.NONE, hp_power_loss=0):
-        super().__init__(moves, max_moves, health, max_health, power, player_id, row, col, ARCHER_IMAGE, fortified, hp_power_loss)
-        self.range = range
+    def __init__(self, moves, max_moves, health, max_health, power, player_id, row, col, fortified : FortifiedBonus=FortifiedBonus.NONE, hp_power_loss=0, attack_range=2):
+        super().__init__(moves, max_moves, health, max_health, power, player_id, row, col, ARCHER_IMAGE, fortified, hp_power_loss, attack_range)
 
     def attack(self, defender, tiles):
         self.moves = 0
@@ -271,8 +313,8 @@ class Archer(Troop):
         return reward
 
 class Center(Entity):
-    def __init__(self, health, max_health, power, player_id, row, col, hp_power_loss=0):
-        super().__init__(health, max_health, power, player_id, row, col, CITY_CENTER_IMAGE, hp_power_loss)
+    def __init__(self, health, max_health, power, player_id, row, col, hp_power_loss=0, attack_range=0):
+        super().__init__(health, max_health, power, player_id, row, col, CITY_CENTER_IMAGE, hp_power_loss, attack_range)
 
     def kill(self, tiles):
         self.health = 0

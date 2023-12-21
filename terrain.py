@@ -7,9 +7,7 @@ import numpy as np
 
 
 from options import TileType, CnnChannels, Rewards, \
-DIRECTIONS_ODD, DIRECTIONS_EVEN, HEX_SIZE, FortifiedBonus
-
-from entities import Warrior, Archer, Center, Troop
+DIRECTIONS_ODD, DIRECTIONS_EVEN, HEX_SIZE
 
 class Tile:
     HEXAGON_IMAGE = pygame.image.load('./images/hexagon.png')  
@@ -132,59 +130,6 @@ class Terrain:
         return nearest_troop, min_moves, best_path
     
 
-    #returns a map where -2 means attackable, -1 means not reachable, 0 means obstructed, > 0 shows how many moves to get to there from curr pos
-    #DOES NOT FIND ARCHER ATTACK IF ARCHER ONLY HAS 1 MOVE LEFT, LOOP TWO MOVES IF IT'S AN ARCHER FOR FIND ATTACK
-    def get_reachable_pos(self, troop):
-        observation = np.full((self.row_count, self.column_count), -1)
-        # Use a queue to perform a breadth-first search
-        queue = deque([(troop.row, troop.col, 0)])
-        max_moves = troop.moves
-        while queue:
-            curr_x, curr_y, moves = queue.popleft()
-            curr_tile = self.tiles[curr_x, curr_y]
-            curr_obs = observation[curr_x, curr_y]
-
-            # Not reachable
-            if moves > max_moves or curr_tile.obstacle:
-                continue
-            # Not improvable
-            if (curr_obs >= 0 and curr_obs < moves) or curr_obs == -2:
-                continue
-
-            # Check the tile's troop and building
-            tile_troop = curr_tile.troop
-            tile_building = curr_tile.building
-
-            #Friendly troop (not starting position)
-            if (curr_x != troop.row or curr_y != troop.col) \
-                and (tile_troop and tile_troop.player_id == troop.player_id):
-                observation[curr_x, curr_y] = 0
-                continue
-
-            #enemy troop or building
-            elif (tile_troop and tile_troop.player_id != troop.player_id) \
-                or (tile_building and tile_building.player_id != troop.player_id):
-                #if archer and long range or is close range
-                if (isinstance(troop, Archer) and moves == 2) or moves == 1:
-                    observation[curr_x, curr_y] = -2
-                #if is out of range
-                else:
-                    observation[curr_x, curr_y] = 0
-                continue
-            #just move
-            else:
-                observation[curr_x, curr_y] = moves
-                
-
-            directions = DIRECTIONS_EVEN if curr_x % 2 == 0 else DIRECTIONS_ODD
-            for dx, dy in directions:
-                nx, ny = curr_x + dx, curr_y + dy
-                if nx >= 0 and nx < self.row_count and ny >= 0 and ny < self.column_count:
-                    queue.append((nx, ny, moves+self.tiles[nx, ny].move_cost))
-        #Add that fortification removes all the moves
-        observation[troop.row, troop.col] = troop.max_moves
-        return observation
-
     #Observations need to be redone and rethought, they make no sense now, especially the positions and the mask there
     def get_obs(self, player): 
         observation = np.full((self.row_count, self.column_count, len(CnnChannels)), -1, dtype=np.float32)
@@ -221,7 +166,7 @@ class Terrain:
                     if troop.player_id == player.id and troop.moves > 0:
                         #mark reachable positions
                         #this can be optimized by just passing all the troops once
-                        new_values = self.get_reachable_pos(troop)
+                        new_values = troop.get_reachable_pos(self.tiles)
                         
                         current_values = observation[:, :, CnnChannels.CAN_MOVE.value]
 
@@ -274,7 +219,7 @@ class Terrain:
             from_troop, to_row, to_col, moves = self._get_action(troops)
         #check if the destination is valid for that troop
         else:
-            valid_actions = self.get_reachable_pos(from_troop)
+            valid_actions = from_troop.get_reachable_pos(self.tiles)
             moves = valid_actions[to_row, to_col]
             if not (moves > 0 or moves == -2):
                 reward = Rewards.INVALID.value
@@ -291,7 +236,7 @@ class Terrain:
         elif (to_troop is None and to_building is None) or \
             (to_building and to_building.player_id == from_troop.player_id):
             reward = from_troop.move(to_row, to_col, moves, self.tiles)
-            
+
         #Attack
         else:
             target = to_building if to_building is not None else to_troop
@@ -314,7 +259,7 @@ class Terrain:
         troop = np.random.choice(filtered_troops)
 
         #get all valid actions (2d array with 1 indicating valid action)
-        actions = self.get_reachable_pos(troop)
+        actions = troop.get_reachable_pos(self.tiles)
 
         # Find the indices where actions are valid
         valid_indices = np.where(actions >= 1)
