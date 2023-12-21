@@ -1,23 +1,10 @@
 WORKING NOW:
 
-#I will change get_action function
+DO branching for the next features
+
 Get_best_path function doesn't work for atchers ranged attack, because an archer might not be able to go there, only attack
 
-don't care about archer for now, I want to make my code better and transfer the move, attack and foritfy functions to the entities themselves.
-We will do it very simply for now. Only display attackable troops from the position you are standing. I am not calculating everything you can attack with movement included.
-so you have to move first, then from that position will show if you can attack or not
-Move the fortify, and other actions to the entities Probably
-I can add terrain modifier to the troop as attribute so I can store it on the troop,
-so I can have the attack function on the troop
 
-I have to update reachable pos somehow. The position might not be reachable, but the archer could still be able to attack it.
-
-
-
-
-Implementing arher class
-Making a base class for all entities
-I can add draw class to the entities so the tile can just call the draw
 
 HIGH PRIORITY:
 
@@ -26,8 +13,6 @@ After my move it is extremely slow, find out why (only for interactable mode, no
 ADD UNIT TESTS to test observation and edge cases (out of map, no moves, etc...)
 
 MEDIUM PRIORITY:
-
-If I have 0.5 movement and the cost is 10 movement I will still move there, have to fix that 
 
 observations could return a value with row and col, instead of the whole grid? could save time, becasue most of the time most of the grid will be empty
 
