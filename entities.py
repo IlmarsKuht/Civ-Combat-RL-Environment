@@ -53,7 +53,7 @@ class Entity(ABC):
             pygame.draw.circle(window, PLAYER_COLOR, (self.x, self.y), HEX_SIZE/15, 2)
 
     @abstractmethod
-    def kill(self):
+    def kill(self, tiles):
         """
         What happens when this Entity is killed, rewards and other things.
         """
@@ -62,6 +62,12 @@ class Entity(ABC):
     def remove_from_tiles(self, tiles):
         """
         removes the entity from tiles array
+        """
+
+    @abstractmethod
+    def add_to_tiles(self, tiles):
+        """
+        adds the entity to tiles array
         """
     
     def _draw_attributes(self, window):
@@ -140,8 +146,10 @@ class Troop(Entity, ABC):
         self.moves = 0
         return Rewards.DEFAULT.value
 
-    def move(self, new_row, new_col, moves):
+    def move(self, new_row, new_col, moves, tiles):
         self._remove_fortify_bonus()
+        self.remove_from_tiles(tiles)
+        self.add_to_tiles(tiles, new_row, new_col)
 
         self.moves -= moves
         self.row = new_row
@@ -150,13 +158,17 @@ class Troop(Entity, ABC):
     
     def remove_from_tiles(self, tiles):
         tiles[self.row, self.col].troop = None
+    
+    def add_to_tiles(self, tiles, row, col):
+        tiles[row, col].troop = self
 
-    def kill(self):
+    def kill(self, tiles):
         self.health = 0
+        self.remove_from_tiles(tiles)
         return Rewards.KILL_TROOP.value
 
     @abstractmethod
-    def attack(self, defender):
+    def attack(self, defender, tiles):
         """
         Implement seperate attack method for each Troop type to deal the damage
         """
@@ -171,7 +183,7 @@ class Troop(Entity, ABC):
         self.power -= self.hp_power_loss
 
     @abstractmethod
-    def _handle_attack_result(self, defender):
+    def _handle_attack_result(self, defender, tiles):
         """
         Implement method that handles the result of the fight after each troop has taken damage"""
 
@@ -180,7 +192,7 @@ class Warrior(Troop):
     def __init__(self, moves, max_moves, health, max_health, power, player_id, row, col, fortified : FortifiedBonus=FortifiedBonus.NONE, hp_power_loss=0):
         super().__init__(moves, max_moves, health, max_health, power, player_id, row, col, WARRIOR_IMAGE, fortified, hp_power_loss)
 
-    def attack(self, defender):
+    def attack(self, defender, tiles):
         self.moves = 0
         self._remove_fortify_bonus()
         #get the defending and attacking troops power
@@ -198,33 +210,30 @@ class Warrior(Troop):
         if isinstance(defender, Troop):
             defender._update_hp_power_loss()
 
-        reward = self._handle_attack_result(defender)
+        reward = self._handle_attack_result(defender, tiles)
 
         return reward
     
-    def _handle_attack_result(self, defender):
+    def _handle_attack_result(self, defender, tiles):
         reward = Rewards.ATTACK.value
-        unit_to_kill = None
 
-        if defender.health <= 0 and self.health <= 0:
-            # If both units are dead, kill the unit with the lowest health.
-            unit_to_kill = min(defender.health, self.health)
-            # Give a little health to surviver
-            if unit_to_kill == defender:
-                self.health = 1
+        # Determine the unit to kill and potentially revive.
+        if defender.health <= 0 or self.health <= 0:
+            if defender.health <= 0 and self.health <= 0:
+                # Both units are dead, revive the one with the most health.
+                survivor, victim = (self, defender) if self.health > defender.health else (defender, self)
+                survivor.health = 1
             else:
-                defender.health = 1
+                # Only one unit is dead.
+                survivor, victim = (self, defender) if defender.health <= 0 else (defender, self)
 
-        elif defender.health <= 0:
-            unit_to_kill = defender
-    
-        elif self.health <= 0:
-            unit_to_kill = self   
+            kill_reward = victim.kill(tiles)
 
-        # Finally, kill the designated unit and return the reward.
-        if unit_to_kill:
-            kill_reward = unit_to_kill.kill()
-            reward += kill_reward if unit_to_kill==defender else -kill_reward
+            # Handle rewards and movement if applicable.
+            reward += kill_reward if survivor == self else -kill_reward
+            if survivor == self:
+                self.move(defender.row, defender.col, 0, tiles)
+
         return reward
 
 
@@ -233,7 +242,7 @@ class Archer(Troop):
         super().__init__(moves, max_moves, health, max_health, power, player_id, row, col, ARCHER_IMAGE, fortified, hp_power_loss)
         self.range = range
 
-    def attack(self, defender):
+    def attack(self, defender, tiles):
         self.moves = 0
         self._remove_fortify_bonus()
         #get the defending and attacking troops power
@@ -249,15 +258,15 @@ class Archer(Troop):
         if isinstance(defender, Troop):
             defender._update_hp_power_loss()
 
-        reward = self._handle_attack_result(defender)
+        reward = self._handle_attack_result(defender, tiles)
 
         return reward
     
-    def _handle_attack_result(self, defender):
+    def _handle_attack_result(self, defender, tiles):
         reward = Rewards.ATTACK.value
 
         if defender.health <= 0:
-            reward += defender.kill()
+            reward += defender.kill(tiles)
 
         return reward
 
@@ -265,9 +274,13 @@ class Center(Entity):
     def __init__(self, health, max_health, power, player_id, row, col, hp_power_loss=0):
         super().__init__(health, max_health, power, player_id, row, col, CITY_CENTER_IMAGE, hp_power_loss)
 
-    def kill(self):
+    def kill(self, tiles):
         self.health = 0
+        self.remove_from_tiles(tiles)
         return Rewards.KILL_CITY.value
     
     def remove_from_tiles(self, tiles):
         tiles[self.row, self.col].building = None
+
+    def add_to_tiles(self, tiles, row, col):
+        tiles[row, col].building = self

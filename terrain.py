@@ -285,31 +285,17 @@ class Terrain:
 
         #fortify if the same tile it's standing on
         if from_row == to_row and from_col == to_col:
-            #FORTIFY SHOULD BE A TROOP METHOD, DOESN'T MAKE SENSE THAT THE TERRAIN HAS THIS, SAME FOR MOVE ATTACK ETC..
-            #WE CAN KEEP THESE METHODS FOR TERRAIN, BUT THEY WILL CALL THE TROOP FORTIFY, IF THEY NEED TO DO SOMETHING IN TERRAIN SO THEY CAN STILL DO IT
-            reward = self._fortify(from_troop)
+            reward = from_troop.fortify()
 
         #if nothing or friendly building just move
         elif (to_troop is None and to_building is None) or \
             (to_building and to_building.player_id == from_troop.player_id):
-            reward = self._move(to_row, to_col, from_troop, moves)
-
-        #Warrior attacks
-        elif isinstance(from_troop, Warrior):
-            #if troop in building, attacker attack the building not the troop
-            if to_building:
-                reward = self._attack(from_troop, to_building)
-            elif to_troop:
-                reward = self._attack(from_troop, to_troop)
-
-        #Archer attacks
-        elif isinstance(from_troop, Archer):
-            #make archer not get damaged attacking
-            #if troop in building, it only attack building
-            if to_building:
-                reward = self._attack(from_troop, to_building)
-            elif to_troop:
-                reward = self._attack(from_troop, to_troop)
+            reward = from_troop.move(to_row, to_col, moves, self.tiles)
+            
+        #Attack
+        else:
+            target = to_building if to_building is not None else to_troop
+            reward = from_troop.attack(target, self.tiles)
 
         return reward
     
@@ -345,28 +331,9 @@ class Terrain:
         moves = actions[target_row, target_col]
 
         return troop, target_row, target_col, moves
-       
-    def _fortify(self, troop):
-        return troop.fortify()
-    
-    def _move(self, new_row, new_col, troop, moves):
-        self.tiles[troop.row][troop.col].troop = None
-        self.tiles[new_row][new_col].troop = troop
-        
-        return troop.move(new_row, new_col, moves)
 
     def _attack(self, attacker, defender):
-        reward = attacker.attack(defender)
-        if attacker.health <= 0:
-            attacker.remove_from_tiles(self.tiles)
-        elif defender.health <= 0:
-            to_row = defender.row
-            to_col = defender.col
-            defender.remove_from_tiles(self.tiles)
-            #move the attacker to defender position, if attacker is warrior
-            if isinstance(attacker, Warrior):
-                attacker.move(to_row, to_col, 0)
-        return reward
+        return  attacker.attack(defender, self.tiles)
     
     def _cleanup(self, entities):
         for entity in entities:
