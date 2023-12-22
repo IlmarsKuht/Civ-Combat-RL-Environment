@@ -10,17 +10,33 @@ from options import TileType, CnnChannels, Rewards, \
 DIRECTIONS_ODD, DIRECTIONS_EVEN, HEX_SIZE
 
 class Tile:
-    HEXAGON_IMAGE = pygame.image.load('./images/hexagon.png')  
-    HEXAGON_IMAGE = pygame.transform.scale(HEXAGON_IMAGE, (HEX_SIZE, HEX_SIZE))  
-    HEXAGON_IMAGE = pygame.transform.rotate(HEXAGON_IMAGE, 90)
+    PLAINS_IMAGE = pygame.image.load('./images/hexagon.png')  
+    PLAINS_IMAGE = pygame.transform.scale(PLAINS_IMAGE, (HEX_SIZE, HEX_SIZE))  
+    PLAINS_IMAGE = pygame.transform.rotate(PLAINS_IMAGE, 90)
 
     HEXAGON_MOVE_OVERLAY_IMAGE = pygame.image.load('./images/overlay_move.png')  
     HEXAGON_MOVE_OVERLAY_IMAGE = pygame.transform.scale(HEXAGON_MOVE_OVERLAY_IMAGE, (HEX_SIZE, HEX_SIZE))  
     HEXAGON_MOVE_OVERLAY_IMAGE = pygame.transform.rotate(HEXAGON_MOVE_OVERLAY_IMAGE, 90)
 
-    HEXAGON_ATTACK_OVERLAY_IMAGE = pygame.image.load('./images/overlay_move.png')  
+    HEXAGON_ATTACK_OVERLAY_IMAGE = pygame.image.load('./images/overlay_attack.png')  
     HEXAGON_ATTACK_OVERLAY_IMAGE = pygame.transform.scale(HEXAGON_ATTACK_OVERLAY_IMAGE, (HEX_SIZE, HEX_SIZE))  
     HEXAGON_ATTACK_OVERLAY_IMAGE = pygame.transform.rotate(HEXAGON_ATTACK_OVERLAY_IMAGE, 90)
+
+    FOREST_IMAGE = pygame.image.load('./images/forest.png')  
+    FOREST_IMAGE = pygame.transform.scale(FOREST_IMAGE, (HEX_SIZE, HEX_SIZE))  
+    FOREST_IMAGE = pygame.transform.rotate(FOREST_IMAGE, 90)
+
+    HILLS_IMAGE = pygame.image.load('./images/hills.png')  
+    HILLS_IMAGE = pygame.transform.scale(HILLS_IMAGE, (HEX_SIZE, HEX_SIZE))  
+    HILLS_IMAGE = pygame.transform.rotate(HILLS_IMAGE, 90)
+
+    MOUNTAIN_IMAGE = pygame.image.load('./images/mountain.png')  
+    MOUNTAIN_IMAGE = pygame.transform.scale(MOUNTAIN_IMAGE, (HEX_SIZE, HEX_SIZE))  
+    MOUNTAIN_IMAGE = pygame.transform.rotate(MOUNTAIN_IMAGE, 90)
+
+    WATER_IMAGE = pygame.image.load('./images/water.png')  
+    WATER_IMAGE = pygame.transform.scale(WATER_IMAGE, (HEX_SIZE, HEX_SIZE))  
+    WATER_IMAGE = pygame.transform.rotate(WATER_IMAGE, 90)
 
     WARRIOR_IMAGE = pygame.image.load('./images/warrior.png')
     WARRIOR_IMAGE = pygame.transform.scale(WARRIOR_IMAGE, (HEX_SIZE/2, HEX_SIZE/2))  
@@ -29,7 +45,27 @@ class Tile:
     ARCHER_IMAGE = pygame.transform.scale(ARCHER_IMAGE, (HEX_SIZE/2, HEX_SIZE/2))  
 
     CITY_CENTER_IMAGE = pygame.image.load('./images/city_center.png')
-    CITY_CENTER_IMAGE = pygame.transform.scale(CITY_CENTER_IMAGE, (HEX_SIZE/2, HEX_SIZE/2))  
+    CITY_CENTER_IMAGE = pygame.transform.scale(CITY_CENTER_IMAGE, (HEX_SIZE/2, HEX_SIZE/2)) 
+
+    ENCAMPMENT_IMAGE = pygame.image.load('./images/encampment.png')
+    ENCAMPMENT_IMAGE = pygame.transform.scale(ENCAMPMENT_IMAGE, (HEX_SIZE/2, HEX_SIZE/2)) 
+
+    PROBABILITY_MATRIX = {
+        TileType.SEA:      [0.5, 0.5, 0.0, 0.0, 0.0],
+        TileType.PLAINS:   [0.1, 0.4, 0.2, 0.2, 0.1],
+        TileType.HILLS:    [0.0, 0.2, 0.3, 0.3, 0.2],
+        TileType.FOREST:   [0.0, 0.2, 0.3, 0.4, 0.1],
+        TileType.MOUNTAIN: [0.0, 0.1, 0.2, 0.2, 0.5],
+    }
+
+    TILE_IMAGES = {
+        TileType.PLAINS: PLAINS_IMAGE,
+        TileType.HILLS: HILLS_IMAGE,
+        TileType.FOREST: FOREST_IMAGE,
+        TileType.MOUNTAIN: MOUNTAIN_IMAGE,
+        TileType.SEA: WATER_IMAGE,
+    }
+
 
     def __init__(self, type:TileType, move_cost=1, obstacle=False, draw=False, x=None, y=None, owner=None, highlight_move=False, highlight_attack=False):
         if draw:
@@ -50,9 +86,9 @@ class Tile:
         window.blit(image, rect)
 
     def draw(self, window, player_id):
-        #Draw hexagon
-        #I have centered x and y, so I need to adjust the tiles, so everthing else can stay the same
-        window.blit(Tile.HEXAGON_IMAGE, (self.x-HEX_SIZE/2, self.y-HEX_SIZE/2))
+        tile_image = Tile.TILE_IMAGES[self.type]
+
+        window.blit(tile_image, (self.x-HEX_SIZE/2, self.y-HEX_SIZE/2))
         if self.highlight_move:
             window.blit(Tile.HEXAGON_MOVE_OVERLAY_IMAGE, (self.x-HEX_SIZE/2, self.y-HEX_SIZE/2))
         if self.highlight_attack:
@@ -82,15 +118,69 @@ class Terrain:
         for row in range(self.row_count):
             rows = []
             for col in range(self.column_count):
-                if draw:
-                    x = HEX_SIZE * col + (HEX_SIZE/2 * (row % 2)) 
-                    y = HEX_SIZE * 0.75 * row
-                    tile = Tile(TileType.PLAINS, 1, False, True, x+margin, y+margin)
+                tile_type = self.choose_tile_type(row, col, tiles)
+
+                # Determine obstacle and move_cost based on tile_type
+                if tile_type in [TileType.MOUNTAIN, TileType.SEA]:
+                    obstacle = True
+                    move_cost = 0  # You can adjust this if needed
+                elif tile_type in [TileType.HILLS, TileType.FOREST]:
+                    obstacle = False
+                    move_cost = 1.5  # Higher move cost for hills and forests
                 else:
-                    tile = Tile(TileType.PLAINS)
+                    obstacle = False
+                    move_cost = 1
+
+                if draw:
+                    x = HEX_SIZE * col + (HEX_SIZE / 2 * (row % 2))
+                    y = HEX_SIZE * 0.75 * row
+                    tile = Tile(tile_type, move_cost, obstacle, True, x + margin, y + margin)
+                else:
+                    tile = Tile(tile_type, move_cost, obstacle)
+
                 rows.append(tile)
             tiles.append(rows)
         return np.array(tiles)
+    
+    def choose_tile_type(self, row, col, tiles):
+        if row == 0 and col == 0:
+            # Randomly choose an initial tile type for the first tile
+            return random.choice(list(TileType))
+
+        # Get neighboring tile types and calculate the probability for the next tile
+        neighboring_types = self.get_neighboring_tile_types(row, col, tiles)
+        probabilities = self.calculate_combined_probabilities(neighboring_types)
+
+        # Choose the next tile type based on the calculated probabilities
+        return random.choices(list(TileType), weights=probabilities, k=1)[0]
+    
+    def get_neighboring_tile_types(self, row, col, tiles):
+        neighbors = []
+
+        # Select the direction offsets based on the row
+        directions = DIRECTIONS_EVEN if row % 2 == 0 else DIRECTIONS_ODD
+
+        for dr, dc in directions:
+            nr, nc = row + dr, col + dc  # Calculate the neighbor's row and column
+            if 0 <= nr < self.row_count and 0 <= nc < self.column_count:
+                if nr < len(tiles) and nc < len(tiles[nr]):
+                    neighbors.append(tiles[nr][nc].type)
+
+        return neighbors
+    
+    def calculate_combined_probabilities(self, neighboring_types):
+        if not neighboring_types:
+            return [1 / len(TileType)] * len(TileType)  # Equal probability if no neighbors
+
+        combined_probabilities = [0] * len(TileType)
+        for neighbor_type in neighboring_types:
+            probabilities = Tile.PROBABILITY_MATRIX[neighbor_type]
+            combined_probabilities = [sum(x) for x in zip(combined_probabilities, probabilities)]
+
+        # Normalize to ensure the sum of probabilities is 1
+        total = sum(combined_probabilities)
+        return [p / total for p in combined_probabilities]
+
 
     #Observations need to be redone and rethought, they make no sense now, especially the positions and the mask there
     def get_obs(self, player): 

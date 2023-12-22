@@ -1,10 +1,6 @@
 WORKING NOW:
 
 DO branching for the next features
-Should the troops be constant amount or not. Maybe I should go on the discord and talk with them about this.
-Go on gymnasium if there are other similar games with changing inputs.
-Well I guess it's not changing, you could just input one troop at a time until all troops are out of moves.
-
 
 
 HIGH PRIORITY:

@@ -369,18 +369,12 @@ class Civ6CombatEnv(gym.Env):
                         if troop_to_move:
                             #Move the troop to the tile if he can move there
                             if tile.highlight_move or tile.highlight_attack:
-                                #Clear the highlight_moves off the board
-                                for tile_row in range(self.row_count):
-                                    for tile_col in range(self.col_count):
-                                        self.terrain[tile_row, tile_col].highlight_move = False
-                                        self.terrain[tile_row, tile_col].highlight_attack = False
                                 _, _, terminated, truncated, _ = self.step(((troop_to_move.row, troop_to_move.col), (row, col)))
-                            else:
-                                #Clear the highlight_moves off the board
-                                for tile_row in range(self.row_count):
-                                    for tile_col in range(self.col_count):
-                                        self.terrain[tile_row, tile_col].highlight_move = False
-                                        self.terrain[tile_row, tile_col].highlight_attack = False
+                            #Clear the highlight_moves off the board
+                            for tile_row in range(self.row_count):
+                                for tile_col in range(self.col_count):
+                                    self.terrain[tile_row, tile_col].highlight_move = False
+                                    self.terrain[tile_row, tile_col].highlight_attack = False
                             troop_to_move = None
 
                         #if friendly troop with moves
@@ -393,10 +387,8 @@ class Civ6CombatEnv(gym.Env):
                                 for tile_col in range(self.col_count):
                                     if obs[tile_row, tile_col] > 0:
                                         self.terrain[tile_row, tile_col].highlight_move = True
-                                        self.terrain[tile_row, tile_col].highlight_attack = False
                                     elif obs[tile_row, tile_col] == -2:
                                         self.terrain[tile_row, tile_col].highlight_attack = True
-                                        self.terrain[tile_row, tile_col].highlight_move = False
                         if terminated or truncated:
                             self.reset()
                             terminated, truncated = False, False
