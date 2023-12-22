@@ -223,7 +223,7 @@ class Civ6CombatEnv(gym.Env):
 
         row = random.randrange(self.row_count)
         col = random.randrange(self.col_count)
-        while self.terrain[row, col].owner is not None and max_attempts > 0:
+        while (self.terrain[row, col].owner is not None or self.terrain[row, col].obstacle) and max_attempts > 0:
             row = random.randrange(self.row_count)
             col = random.randrange(self.col_count)
             max_attempts -= 1
@@ -323,7 +323,7 @@ class Civ6CombatEnv(gym.Env):
 
             # Check the tile's troop and building
             tile = self.terrain[curr_x, curr_y]
-            if tile.troop is None and tile.building is None:
+            if tile.troop is None and tile.building is None and not tile.obstacle:
                 free_positions.append((curr_x, curr_y))
                 if len(free_positions) == position_count:
                     break
@@ -369,12 +369,17 @@ class Civ6CombatEnv(gym.Env):
                         if troop_to_move:
                             #Move the troop to the tile if he can move there
                             if tile.highlight_move or tile.highlight_attack:
+                                for tile_row in range(self.row_count):
+                                    for tile_col in range(self.col_count):
+                                        self.terrain[tile_row, tile_col].highlight_move = False
+                                        self.terrain[tile_row, tile_col].highlight_attack = False
                                 _, _, terminated, truncated, _ = self.step(((troop_to_move.row, troop_to_move.col), (row, col)))
-                            #Clear the highlight_moves off the board
-                            for tile_row in range(self.row_count):
-                                for tile_col in range(self.col_count):
-                                    self.terrain[tile_row, tile_col].highlight_move = False
-                                    self.terrain[tile_row, tile_col].highlight_attack = False
+                            else:
+                                for tile_row in range(self.row_count):
+                                    for tile_col in range(self.col_count):
+                                        self.terrain[tile_row, tile_col].highlight_move = False
+                                        self.terrain[tile_row, tile_col].highlight_attack = False
+                            
                             troop_to_move = None
 
                         #if friendly troop with moves

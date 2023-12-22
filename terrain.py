@@ -50,13 +50,15 @@ class Tile:
     ENCAMPMENT_IMAGE = pygame.image.load('./images/encampment.png')
     ENCAMPMENT_IMAGE = pygame.transform.scale(ENCAMPMENT_IMAGE, (HEX_SIZE/2, HEX_SIZE/2)) 
 
+    #These are quite random, need to adjust them
     PROBABILITY_MATRIX = {
-        TileType.SEA:      [0.5, 0.5, 0.0, 0.0, 0.0],
-        TileType.PLAINS:   [0.1, 0.4, 0.2, 0.2, 0.1],
-        TileType.HILLS:    [0.0, 0.2, 0.3, 0.3, 0.2],
-        TileType.FOREST:   [0.0, 0.2, 0.3, 0.4, 0.1],
-        TileType.MOUNTAIN: [0.0, 0.1, 0.2, 0.2, 0.5],
-    }
+    TileType.PLAINS:    [0.4, 0.2, 0.2, 0.1, 0.1],  
+    TileType.HILLS:     [0.2, 0.3, 0.3, 0.2, 0.0],  
+    TileType.FOREST:    [0.2, 0.3, 0.4, 0.1, 0.0],  
+    TileType.MOUNTAIN:  [0.1, 0.2, 0.2, 0.3, 0.2],  
+    TileType.SEA:       [0.3, 0.0, 0.0, 0.0, 0.7],
+}
+
 
     TILE_IMAGES = {
         TileType.PLAINS: PLAINS_IMAGE,
