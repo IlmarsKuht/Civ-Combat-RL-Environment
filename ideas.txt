@@ -39,8 +39,6 @@ Add unit training
 
 LOW PRIORITY:
 
-Package my project later
-
 Why Box obs doesn't accept some shapes? (I guess doesn't except not perfect square)
 Make the code better
 a lot of the functions should be made private.
