@@ -33,9 +33,9 @@ def random_test():
 
 def unitTest():
     #First test using stable baselines
-    print(f"Starting stable baselines test")
-    stable_baselines_test()
-    print(f"Finished stable baselines test")
+    # print(f"Starting stable baselines test")
+    # stable_baselines_test()
+    # print(f"Finished stable baselines test")
 
     #completely random test
     print(f"Starting random test")

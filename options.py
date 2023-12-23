@@ -1,11 +1,11 @@
 from enum import Enum
 
 class TileType(Enum):
-    PLAINS = 1
-    HILLS = 2
+    SEA = 1
+    PLAINS = 2
     FOREST = 3
-    MOUNTAIN = 4
-    SEA = 5
+    HILLS = 4
+    MOUNTAIN = 5
 
 PLAYER_COLOR = (255, 215, 0)
 BOT_COLORS = ((255,0,0), (255,0,255), (0,0,255), (0, 255, 255))

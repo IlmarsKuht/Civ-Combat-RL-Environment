@@ -23,16 +23,13 @@ class Tile:
     HEXAGON_ATTACK_OVERLAY_IMAGE = pygame.transform.rotate(HEXAGON_ATTACK_OVERLAY_IMAGE, 90)
 
     FOREST_IMAGE = pygame.image.load('./images/forest.png')  
-    FOREST_IMAGE = pygame.transform.scale(FOREST_IMAGE, (HEX_SIZE, HEX_SIZE))  
-    FOREST_IMAGE = pygame.transform.rotate(FOREST_IMAGE, 90)
+    FOREST_IMAGE = pygame.transform.scale(FOREST_IMAGE, (HEX_SIZE*2/3, HEX_SIZE*2/3))  
 
     HILLS_IMAGE = pygame.image.load('./images/hills.png')  
-    HILLS_IMAGE = pygame.transform.scale(HILLS_IMAGE, (HEX_SIZE, HEX_SIZE))  
-    HILLS_IMAGE = pygame.transform.rotate(HILLS_IMAGE, 90)
+    HILLS_IMAGE = pygame.transform.scale(HILLS_IMAGE, (HEX_SIZE*2/3, HEX_SIZE*2/3))  
 
     MOUNTAIN_IMAGE = pygame.image.load('./images/mountain.png')  
-    MOUNTAIN_IMAGE = pygame.transform.scale(MOUNTAIN_IMAGE, (HEX_SIZE, HEX_SIZE))  
-    MOUNTAIN_IMAGE = pygame.transform.rotate(MOUNTAIN_IMAGE, 90)
+    MOUNTAIN_IMAGE = pygame.transform.scale(MOUNTAIN_IMAGE, (HEX_SIZE*2/3, HEX_SIZE*2/3))  
 
     WATER_IMAGE = pygame.image.load('./images/water.png')  
     WATER_IMAGE = pygame.transform.scale(WATER_IMAGE, (HEX_SIZE, HEX_SIZE))  
@@ -52,20 +49,20 @@ class Tile:
 
     #These are quite random, need to adjust them
     PROBABILITY_MATRIX = {
-    TileType.PLAINS:    [0.4, 0.2, 0.2, 0.1, 0.1],  
-    TileType.HILLS:     [0.2, 0.3, 0.3, 0.2, 0.0],  
-    TileType.FOREST:    [0.2, 0.3, 0.4, 0.1, 0.0],  
-    TileType.MOUNTAIN:  [0.1, 0.2, 0.2, 0.3, 0.2],  
-    TileType.SEA:       [0.3, 0.0, 0.0, 0.0, 0.7],
+    TileType.SEA:       [0.2, 0.4, 0.2, 0.2, 0.0],
+    TileType.PLAINS:    [0.1, 0.5, 0.2, 0.1, 0.1],  
+    TileType.FOREST:    [0.1, 0.2, 0.4, 0.2, 0.1],  
+    TileType.HILLS:     [0.0, 0.2, 0.3, 0.4, 0.1],  
+    TileType.MOUNTAIN:  [0.0, 0.2, 0.2, 0.3, 0.2],  
 }
 
 
     TILE_IMAGES = {
-        TileType.PLAINS: PLAINS_IMAGE,
-        TileType.HILLS: HILLS_IMAGE,
-        TileType.FOREST: FOREST_IMAGE,
-        TileType.MOUNTAIN: MOUNTAIN_IMAGE,
         TileType.SEA: WATER_IMAGE,
+        TileType.PLAINS: PLAINS_IMAGE,
+        TileType.FOREST: FOREST_IMAGE,
+        TileType.HILLS: HILLS_IMAGE,
+        TileType.MOUNTAIN: MOUNTAIN_IMAGE,
     }
 
 
@@ -89,8 +86,10 @@ class Tile:
 
     def draw(self, window, player_id):
         tile_image = Tile.TILE_IMAGES[self.type]
+        
+        window.blit(Tile.PLAINS_IMAGE, (self.x-HEX_SIZE/2, self.y-HEX_SIZE/2))
 
-        window.blit(tile_image, (self.x-HEX_SIZE/2, self.y-HEX_SIZE/2))
+        self._draw_centered(window, tile_image, self.x, self.y)
         if self.highlight_move:
             window.blit(Tile.HEXAGON_MOVE_OVERLAY_IMAGE, (self.x-HEX_SIZE/2, self.y-HEX_SIZE/2))
         if self.highlight_attack:
