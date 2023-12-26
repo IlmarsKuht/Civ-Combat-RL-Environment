@@ -1,5 +1,10 @@
 WORKING NOW:
 
+BUG: if AI dies, it will go into _get_action and try to choose from no troops apparently, don't know why
+YES, only if AI kills himself then this happens
+
+Why zooming in drops performance so much
+Do conditional rendering if in screen or not? Maybe later
 DO branching for the next features
 
 

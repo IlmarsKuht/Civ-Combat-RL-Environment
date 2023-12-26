@@ -18,7 +18,7 @@ def main():
     #     model = PPO("CnnPolicy", env, n_steps=1024, ent_coef=0.001, verbose=True, tensorboard_log='./logs', policy_kwargs=policy_kwargs)
     # model.learn(total_timesteps=4000, progress_bar=True)
     # model.save("./models/civ6_model")
-    env = Civ6CombatEnv(rows=8, columns=8, max_steps=100, render_mode="interactable", bots=2, start_troops=1, fps=4)
+    env = Civ6CombatEnv(rows=8, columns=8, max_steps=100, render_mode="interactable", bots=2, start_troops=1, fps=60)
     # check_env(env)
     # policy_kwargs = dict(
     #         features_extractor_class=CustomCNN,

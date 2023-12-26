@@ -1,75 +1,65 @@
-import math
 import pygame
+from pygame.math import Vector2
 import random
 
-from collections import deque
 import numpy as np
 
 
 from options import TileType, CnnChannels, Rewards, \
-DIRECTIONS_ODD, DIRECTIONS_EVEN, HEX_SIZE
+    DIRECTIONS_ODD, DIRECTIONS_EVEN, MARGIN, HEX_SIZE, worldToScreen, screenToWorld, \
+    draw_centered
 
 class Tile:
-    PLAINS_IMAGE = pygame.image.load('./images/hexagon.png')  
-    PLAINS_IMAGE = pygame.transform.scale(PLAINS_IMAGE, (HEX_SIZE, HEX_SIZE))  
-    PLAINS_IMAGE = pygame.transform.rotate(PLAINS_IMAGE, 90)
+    BASE_PLAINS_IMAGE = pygame.transform.rotate(pygame.image.load('./images/hexagon.png'), 90)
+    BASE_MOVE_OVERLAY_IMAGE = pygame.transform.rotate(pygame.image.load('./images/overlay_move.png'), 90)
+    BASE_ATTACK_OVERLAY_IMAGE = pygame.transform.rotate(pygame.image.load('./images/overlay_attack.png'), 90)
+    BASE_WATER_IMAGE = pygame.transform.rotate(pygame.image.load('./images/water.png'), 90)
 
-    HEXAGON_MOVE_OVERLAY_IMAGE = pygame.image.load('./images/overlay_move.png')  
-    HEXAGON_MOVE_OVERLAY_IMAGE = pygame.transform.scale(HEXAGON_MOVE_OVERLAY_IMAGE, (HEX_SIZE, HEX_SIZE))  
-    HEXAGON_MOVE_OVERLAY_IMAGE = pygame.transform.rotate(HEXAGON_MOVE_OVERLAY_IMAGE, 90)
+    BASE_FOREST_IMAGE = pygame.image.load('./images/forest.png')
+    BASE_HILLS_IMAGE = pygame.image.load('./images/hills.png')
+    BASE_MOUNTAIN_IMAGE = pygame.image.load('./images/mountain.png')
 
-    HEXAGON_ATTACK_OVERLAY_IMAGE = pygame.image.load('./images/overlay_attack.png')  
-    HEXAGON_ATTACK_OVERLAY_IMAGE = pygame.transform.scale(HEXAGON_ATTACK_OVERLAY_IMAGE, (HEX_SIZE, HEX_SIZE))  
-    HEXAGON_ATTACK_OVERLAY_IMAGE = pygame.transform.rotate(HEXAGON_ATTACK_OVERLAY_IMAGE, 90)
+    PLAINS_IMAGE = pygame.transform.scale(BASE_PLAINS_IMAGE, (HEX_SIZE, HEX_SIZE))
+    MOVE_OVERLAY_IMAGE = pygame.transform.scale(BASE_MOVE_OVERLAY_IMAGE, (HEX_SIZE, HEX_SIZE))
+    ATTACK_OVERLAY_IMAGE = pygame.transform.scale(BASE_ATTACK_OVERLAY_IMAGE, (HEX_SIZE, HEX_SIZE))
+    WATER_IMAGE = pygame.transform.scale(BASE_WATER_IMAGE, (HEX_SIZE, HEX_SIZE))
 
-    FOREST_IMAGE = pygame.image.load('./images/forest.png')  
-    FOREST_IMAGE = pygame.transform.scale(FOREST_IMAGE, (HEX_SIZE*2/3, HEX_SIZE*2/3))  
+    # Scale other images
+    FOREST_IMAGE = pygame.transform.scale(BASE_FOREST_IMAGE, (int(HEX_SIZE * 2/3), int(HEX_SIZE * 2/3)))
+    HILLS_IMAGE = pygame.transform.scale(BASE_HILLS_IMAGE, (int(HEX_SIZE * 2/3), int(HEX_SIZE * 2/3)))
+    MOUNTAIN_IMAGE = pygame.transform.scale(BASE_MOUNTAIN_IMAGE, (int(HEX_SIZE * 2/3), int(HEX_SIZE * 2/3)))
 
-    HILLS_IMAGE = pygame.image.load('./images/hills.png')  
-    HILLS_IMAGE = pygame.transform.scale(HILLS_IMAGE, (HEX_SIZE*2/3, HEX_SIZE*2/3))  
+    
 
-    MOUNTAIN_IMAGE = pygame.image.load('./images/mountain.png')  
-    MOUNTAIN_IMAGE = pygame.transform.scale(MOUNTAIN_IMAGE, (HEX_SIZE*2/3, HEX_SIZE*2/3))  
+    @classmethod
+    def update_images(cls, scale):
+        new_scale = HEX_SIZE * scale.x
+        cls.PLAINS_IMAGE = pygame.transform.scale(cls.BASE_PLAINS_IMAGE, (new_scale, new_scale))
+        cls.MOVE_OVERLAY_IMAGE = pygame.transform.scale(cls.BASE_MOVE_OVERLAY_IMAGE, (new_scale, new_scale))
+        cls.ATTACK_OVERLAY_IMAGE = pygame.transform.scale(cls.BASE_ATTACK_OVERLAY_IMAGE, (new_scale, new_scale))
+        cls.WATER_IMAGE = pygame.transform.scale(cls.BASE_WATER_IMAGE, (new_scale, new_scale))
 
-    WATER_IMAGE = pygame.image.load('./images/water.png')  
-    WATER_IMAGE = pygame.transform.scale(WATER_IMAGE, (HEX_SIZE, HEX_SIZE))  
-    WATER_IMAGE = pygame.transform.rotate(WATER_IMAGE, 90)
-
-    WARRIOR_IMAGE = pygame.image.load('./images/warrior.png')
-    WARRIOR_IMAGE = pygame.transform.scale(WARRIOR_IMAGE, (HEX_SIZE/2, HEX_SIZE/2))  
-
-    ARCHER_IMAGE = pygame.image.load('./images/archer.png')
-    ARCHER_IMAGE = pygame.transform.scale(ARCHER_IMAGE, (HEX_SIZE/2, HEX_SIZE/2))  
-
-    CITY_CENTER_IMAGE = pygame.image.load('./images/city_center.png')
-    CITY_CENTER_IMAGE = pygame.transform.scale(CITY_CENTER_IMAGE, (HEX_SIZE/2, HEX_SIZE/2)) 
-
-    ENCAMPMENT_IMAGE = pygame.image.load('./images/encampment.png')
-    ENCAMPMENT_IMAGE = pygame.transform.scale(ENCAMPMENT_IMAGE, (HEX_SIZE/2, HEX_SIZE/2)) 
+        #overlay images are a little smaller so they fit in the tiles
+        new_scale *= 2/3
+        cls.FOREST_IMAGE = pygame.transform.scale(cls.BASE_FOREST_IMAGE, (int(new_scale), int(new_scale)))
+        cls.HILLS_IMAGE = pygame.transform.scale(cls.BASE_HILLS_IMAGE, (int(new_scale), int(new_scale)))
+        cls.MOUNTAIN_IMAGE = pygame.transform.scale(cls.BASE_MOUNTAIN_IMAGE, (int(new_scale), int(new_scale)))
 
     #These are quite random, need to adjust them
     PROBABILITY_MATRIX = {
-    TileType.SEA:       [0.2, 0.4, 0.2, 0.2, 0.0],
-    TileType.PLAINS:    [0.1, 0.5, 0.2, 0.1, 0.1],  
-    TileType.FOREST:    [0.1, 0.2, 0.4, 0.2, 0.1],  
-    TileType.HILLS:     [0.0, 0.2, 0.3, 0.4, 0.1],  
-    TileType.MOUNTAIN:  [0.0, 0.2, 0.2, 0.3, 0.2],  
-}
-
-
-    TILE_IMAGES = {
-        TileType.SEA: WATER_IMAGE,
-        TileType.PLAINS: PLAINS_IMAGE,
-        TileType.FOREST: FOREST_IMAGE,
-        TileType.HILLS: HILLS_IMAGE,
-        TileType.MOUNTAIN: MOUNTAIN_IMAGE,
+        TileType.WATER:     [0.2, 0.4, 0.2, 0.2, 0.0],
+        TileType.PLAINS:    [0.1, 0.5, 0.2, 0.1, 0.1],  
+        TileType.FOREST:    [0.1, 0.2, 0.4, 0.2, 0.1],  
+        TileType.HILLS:     [0.0, 0.2, 0.3, 0.4, 0.1],  
+        TileType.MOUNTAIN:  [0.0, 0.2, 0.2, 0.3, 0.2],  
     }
 
 
-    def __init__(self, type:TileType, move_cost=1, obstacle=False, draw=False, x=None, y=None, owner=None, highlight_move=False, highlight_attack=False):
+    def __init__(self, type:TileType, move_cost=1, obstacle=False, draw=False, row=None, col=None, \
+                 owner=None, highlight_move=False, highlight_attack=False):
         if draw:
-            self.x = x+HEX_SIZE/2
-            self.y = y+HEX_SIZE/2
+            self.row = row 
+            self.col = col
             self.highlight_move = highlight_move
             self.highlight_attack = highlight_attack
         self.obstacle = obstacle
@@ -79,69 +69,103 @@ class Tile:
         self.move_cost = move_cost
         self.owner = owner
 
-    
-    def _draw_centered(self, window, image, x, y):
-        rect = image.get_rect(center=(x, y))
-        window.blit(image, rect)
+    def _get_type_images(self):
+        background = None
+        foreground = None
+        match self.type:
+            case TileType.WATER:
+                background = Tile.WATER_IMAGE
+            case TileType.PLAINS:
+                background = Tile.PLAINS_IMAGE
+            case TileType.FOREST:
+                background = Tile.PLAINS_IMAGE
+                foreground = Tile.FOREST_IMAGE
+            case TileType.HILLS:
+                background = Tile.PLAINS_IMAGE
+                foreground = Tile.HILLS_IMAGE
+            case TileType.MOUNTAIN:
+                background = Tile.PLAINS_IMAGE
+                foreground = Tile.MOUNTAIN_IMAGE
+        return background, foreground
 
-    def draw(self, window, player_id):
-        tile_image = Tile.TILE_IMAGES[self.type]
+    #Probably I can calculate HEX_SIZE * zoom offset whatever and only calcualte it once and use it everywhere, will it be faster?
+    def draw(self, window, player_id, offset, scale):
+        self.update_images(scale)
+        x = (HEX_SIZE * self.col + (HEX_SIZE / 2 * (self.row % 2))) + HEX_SIZE / 2 + MARGIN 
+        y = (HEX_SIZE * 0.75 * self.row) + HEX_SIZE / 2 + MARGIN
         
-        window.blit(Tile.PLAINS_IMAGE, (self.x-HEX_SIZE/2, self.y-HEX_SIZE/2))
+        background, foreground = self._get_type_images()
+        #top left corner of tile
+        tile_pos = worldToScreen(Vector2(x - HEX_SIZE/2, y - HEX_SIZE/2), offset, scale)
+        #middle of tile
+        tile_mid_pos = worldToScreen(Vector2(x, y), offset, scale)
 
-        self._draw_centered(window, tile_image, self.x, self.y)
+        if background is not None:
+            window.blit(background, tile_pos)
+
+        if foreground is not None:
+            draw_centered(window, foreground, tile_mid_pos)
+
         if self.highlight_move:
-            window.blit(Tile.HEXAGON_MOVE_OVERLAY_IMAGE, (self.x-HEX_SIZE/2, self.y-HEX_SIZE/2))
+            window.blit(Tile.MOVE_OVERLAY_IMAGE, tile_pos)
+
         if self.highlight_attack:
-            window.blit(Tile.HEXAGON_ATTACK_OVERLAY_IMAGE, (self.x-HEX_SIZE/2, self.y-HEX_SIZE/2))
+            window.blit(Tile.ATTACK_OVERLAY_IMAGE, tile_pos)
 
         # Draw Troop
         if self.troop:
-            self.troop.draw(window, player_id)
+            self.troop.draw(window, player_id, offset, scale)
 
         # Draw Building
         if self.building:
-            self.building.draw(window, player_id)
+            self.building.draw(window, player_id, offset, scale)
+
 
 class Terrain:
-    def __init__(self, row_count, column_count, draw=False, margin=None):
+    def __init__(self, row_count, column_count, draw=False):
         self.row_count = row_count
         self.column_count = column_count
-        self.tiles = self.create_tiles(draw, margin)
+        self.tiles = self.create_tiles(draw)
         self.movement_costs = None
-
 
     def __getitem__(self, index):
         return self.tiles[index]
-
-    def create_tiles(self, draw, margin):
+    
+    def create_tiles(self, draw):
         tiles = []
         for row in range(self.row_count):
             rows = []
             for col in range(self.column_count):
                 tile_type = self.choose_tile_type(row, col, tiles)
+                obstacle = False
+                move_cost = 1
 
-                # Determine obstacle and move_cost based on tile_type
-                if tile_type in [TileType.MOUNTAIN, TileType.SEA]:
+                if tile_type == TileType.MOUNTAIN:
                     obstacle = True
-                    move_cost = 0  # You can adjust this if needed
-                elif tile_type in [TileType.HILLS, TileType.FOREST]:
+                    move_cost = 0
+                elif tile_type == TileType.WATER:
+                    obstacle = True
+                    move_cost = 0
+                elif tile_type == TileType.HILLS:
                     obstacle = False
-                    move_cost = 1.5  # Higher move cost for hills and forests
-                else:
+                    move_cost = 1.5
+                elif tile_type == TileType.FOREST:
                     obstacle = False
-                    move_cost = 1
+                    move_cost = 1.5
 
                 if draw:
-                    x = HEX_SIZE * col + (HEX_SIZE / 2 * (row % 2))
-                    y = HEX_SIZE * 0.75 * row
-                    tile = Tile(tile_type, move_cost, obstacle, True, x + margin, y + margin)
+                    tile = Tile(tile_type, move_cost, obstacle, True, row=row, col=col)
                 else:
                     tile = Tile(tile_type, move_cost, obstacle)
 
                 rows.append(tile)
             tiles.append(rows)
         return np.array(tiles)
+    
+    def draw(self, window, player_id, offset, scale):
+        for row in self.tiles:
+            for tile in row:
+                tile.draw(window, player_id, offset, scale)
     
     def choose_tile_type(self, row, col, tiles):
         if row == 0 and col == 0:
@@ -250,11 +274,6 @@ class Terrain:
         observation = np.transpose(observation, (2, 0, 1))
 
         return observation
-    
-    def draw(self, window, player_id):
-        for row in self.tiles:
-            for tile in row:
-                tile.draw(window, player_id)
                 
     def action(self, action, troops):
         reward = Rewards.DEFAULT.value

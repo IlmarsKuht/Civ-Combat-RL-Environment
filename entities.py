@@ -1,25 +1,14 @@
 import pygame
+from pygame.math import Vector2
 from abc import ABC, abstractmethod
 import random
 import math
 from collections import deque
 import numpy as np
 
-from options import HEX_SIZE, Colors, FortifiedBonus, PLAYER_COLOR, BOT_COLORS, MARGIN, Rewards, \
-                    DIRECTIONS_ODD, DIRECTIONS_EVEN
-
-WARRIOR_IMAGE = pygame.image.load('./images/warrior.png')
-WARRIOR_IMAGE = pygame.transform.scale(WARRIOR_IMAGE, (HEX_SIZE/2, HEX_SIZE/2))  
-
-ARCHER_IMAGE = pygame.image.load('./images/archer.png')
-ARCHER_IMAGE = pygame.transform.scale(ARCHER_IMAGE, (HEX_SIZE/2, HEX_SIZE/2))  
-
-CITY_CENTER_IMAGE = pygame.image.load('./images/city_center.png')
-CITY_CENTER_IMAGE = pygame.transform.scale(CITY_CENTER_IMAGE, (HEX_SIZE/2, HEX_SIZE/2))  
-
-def _draw_centered(window, image, x, y):
-    rect = image.get_rect(center=(x, y))
-    window.blit(image, rect)
+from options import Colors, FortifiedBonus, PLAYER_COLOR, BOT_COLORS, MARGIN, Rewards, \
+                    DIRECTIONS_ODD, DIRECTIONS_EVEN, HEX_SIZE, screenToWorld, worldToScreen, \
+                    draw_centered
 
 class Player:
     __id_counter = 0
@@ -31,30 +20,48 @@ class Player:
         self.buildings = []
 
 class Entity(ABC):
-    def __init__(self, health, max_health, power, player_id, row, col, image, hp_power_loss, attack_range):
+    BASE_WARRIOR_IMAGE = pygame.image.load('./images/warrior.png')
+    BASE_ARCHER_IMAGE = pygame.image.load('./images/archer.png')
+    BASE_CITY_CENTER_IMAGE = pygame.image.load('./images/city_center.png')
+    WARRIOR_IMAGE = pygame.transform.scale(BASE_WARRIOR_IMAGE, (HEX_SIZE / 2, HEX_SIZE / 2))
+    ARCHER_IMAGE = pygame.transform.scale(BASE_ARCHER_IMAGE, (HEX_SIZE / 2, HEX_SIZE / 2))
+    CITY_CENTER_IMAGE = pygame.transform.scale(BASE_CITY_CENTER_IMAGE, (HEX_SIZE / 2, HEX_SIZE / 2))
+
+    def update_images(self, scale):
+        new_size = HEX_SIZE / 2 * scale.x
+        Entity.WARRIOR_IMAGE = pygame.transform.scale(Entity.BASE_WARRIOR_IMAGE, (new_size, new_size))
+        Entity.ARCHER_IMAGE = pygame.transform.scale(Entity.BASE_ARCHER_IMAGE, (new_size, new_size))
+        Entity.CITY_CENTER_IMAGE = pygame.transform.scale(Entity.BASE_CITY_CENTER_IMAGE, (new_size, new_size))
+
+    def __init__(self, health, max_health, power, player_id, row, col, hp_power_loss, attack_range):
         self.health = health
         self.max_health = max_health
         self.power = power
         self.player_id = player_id
         self.row = row
         self.col = col
-        self.image = image
         self.hp_power_loss = hp_power_loss
         self.attack_range = attack_range
-    
-    def draw(self, window, player_id):
-        #Center coordinates of the middle of the tile
-        self.x = (HEX_SIZE * self.col + (HEX_SIZE/2 * (self.row % 2)))+HEX_SIZE/2+MARGIN
-        self.y = (HEX_SIZE * 0.75 * self.row)+HEX_SIZE/2+MARGIN
+    def draw(self, window, player_id, image, offset, scale):
+        x = (HEX_SIZE * self.col + (HEX_SIZE / 2 * (self.row % 2))) + HEX_SIZE / 2 + MARGIN
+        y = (HEX_SIZE * 0.75 * self.row) + HEX_SIZE / 2 + MARGIN
 
+        pos = worldToScreen(Vector2(x, y), offset, scale)
+
+        draw_centered(window, image, pos)
+
+        # Calculate the circle's position and size for the camera
+        circle_radius = HEX_SIZE / 15 * scale.x
+        circle_width = int(HEX_SIZE / 25 * scale.x)
+
+        # Draw the circle with the adjusted center and radius
         color = BOT_COLORS[self.player_id % len(BOT_COLORS)]
-        _draw_centered(window, self.image, self.x, self.y)
-        #tag the team color
-        pygame.draw.circle(window, color, (self.x, self.y), HEX_SIZE/15)
-        self._draw_attributes(window)
-        #if player then higlight it (draw outline)
+        pygame.draw.circle(window, color, pos, circle_radius)
+
+        self._draw_attributes(window, x, y, offset, scale)
+       
         if self.player_id == player_id:
-            pygame.draw.circle(window, PLAYER_COLOR, (self.x, self.y), HEX_SIZE/15, 2)
+            pygame.draw.circle(window, PLAYER_COLOR, pos, circle_radius, circle_width)
 
     @abstractmethod
     def kill(self, tiles):
@@ -74,66 +81,74 @@ class Entity(ABC):
         adds the entity to tiles array
         """
     
-    def _draw_attributes(self, window):
-        # Health Bar
-        health_bar_width = HEX_SIZE/2
-        health = self.health / self.max_health  # Health as a percentage
-        green_width = int(health * health_bar_width)
-        red_width = int((1 - health) * health_bar_width)
-        health_bar_x = int(self.x-health_bar_width/2)
-        health_bar_y = int(self.y+HEX_SIZE/4)
-        health_bar_height = HEX_SIZE/25
-        #Change Health color depending on fortification
+    def _draw_attributes(self, window, x, y, offset, scale):
+        health_bar_width = HEX_SIZE / 2
+        health = self.health / self.max_health
+        green_width = int(health * health_bar_width * scale.x) 
+        red_width = int((1 - health) * health_bar_width * scale.x)
+        health_bar_x = int(x - health_bar_width / 2)
+        health_bar_y = int(y + HEX_SIZE / 4 )
+        health_bar_height = HEX_SIZE / 25 * scale.x
         health_color = Colors.HEALTH.value
 
-        pygame.draw.rect(window, health_color, (health_bar_x, health_bar_y, green_width, health_bar_height))  # Green part
-        pygame.draw.rect(window, Colors.HEALTH_LOST.value, (health_bar_x + green_width, health_bar_y, red_width, health_bar_height))  # Red part
+        pos = worldToScreen(Vector2(health_bar_x, health_bar_y), offset, scale)
+
+        pygame.draw.rect(window, health_color, (pos.x, pos.y, green_width, health_bar_height))  # Green part
+        pygame.draw.rect(window, Colors.HEALTH_LOST.value, (pos.x + green_width, pos.y, red_width, health_bar_height))  # Red part
 
         # Power number
-        font = pygame.font.Font(None, int(HEX_SIZE/5))  
+        font = pygame.font.Font(None, int(HEX_SIZE/5 * scale.x))  
         power_text = font.render(str(self.power), True, Colors.BLACK.value) 
-        power_y = self.y-HEX_SIZE/3
-        _draw_centered(window, power_text, self.x, power_y)
+        power_y = y-HEX_SIZE/3
+        power_pos = worldToScreen(Vector2(x,power_y), offset, scale)
+        draw_centered(window, power_text, power_pos)
 
 
 
 class Troop(Entity, ABC):
-    def __init__(self, moves, max_moves, health, max_health, power, player_id, row, col, image, fortified, hp_power_loss, attack_range):
-        super().__init__(health, max_health, power, player_id, row, col, image, hp_power_loss, attack_range)
+
+    def __init__(self, moves, max_moves, health, max_health, power, player_id, row, col, fortified, hp_power_loss, attack_range):
+        super().__init__(health, max_health, power, player_id, row, col, hp_power_loss, attack_range)
         self.moves = moves
         self.max_moves = max_moves
         self.fortified = fortified
 
-    def _draw_attributes(self, window):
-        # Health Bar
-        health_bar_width = HEX_SIZE/2
-        health = self.health / self.max_health  # Health as a percentage
-        green_width = int(health * health_bar_width)
-        red_width = int((1 - health) * health_bar_width)
-        health_bar_x = int(self.x-health_bar_width/2)
-        health_bar_y = int(self.y+HEX_SIZE/4)
-        health_bar_height = HEX_SIZE/25
-        #Change Health color depending on fortification
+    def _draw_attributes(self, window, x, y, offset, scale):
+
+        health_bar_width = HEX_SIZE / 2
+        health = self.health / self.max_health
+        green_width = int(health * health_bar_width * scale.x) 
+        red_width = int((1 - health) * health_bar_width * scale.x)
+        health_bar_x = int(x - health_bar_width / 2)
+        health_bar_y = int(y + HEX_SIZE / 4 )
+        health_bar_height = HEX_SIZE / 25 * scale.x
+
+        # Determine health bar color based on fortification
         health_color = Colors.HEALTH.value
         if self.fortified == FortifiedBonus.FIRST:
             health_color = Colors.FORTIFIED.value
         elif self.fortified == FortifiedBonus.SECOND:
             health_color = Colors.EXTRA_FORTIFIED.value
-        pygame.draw.rect(window, health_color, (health_bar_x, health_bar_y, green_width, health_bar_height))  # Green part
-        pygame.draw.rect(window, Colors.HEALTH_LOST.value, (health_bar_x + green_width, health_bar_y, red_width, health_bar_height))  # Red part
+
+        pos = worldToScreen(Vector2(health_bar_x, health_bar_y), offset, scale)
+
+        pygame.draw.rect(window, health_color, (pos.x, pos.y, green_width, health_bar_height))  # Green part
+        pygame.draw.rect(window, Colors.HEALTH_LOST.value, (pos.x + green_width, pos.y, red_width, health_bar_height))  # Red part
 
         # Movement points
-        font = pygame.font.Font(None, int(HEX_SIZE/5))
+        font = pygame.font.Font(None, int(HEX_SIZE/5*scale.x))
         movement_text = font.render(f"{self.moves}/{self.max_moves}", True, Colors.BLACK.value)
         movement_x = health_bar_x+health_bar_width/2
         movement_y = health_bar_y+HEX_SIZE/30
-        _draw_centered(window, movement_text, movement_x, movement_y)
+        move_pos = worldToScreen(Vector2(movement_x, movement_y), offset, scale)
+        draw_centered(window, movement_text, move_pos)
 
         # Power number
-        font = pygame.font.Font(None, int(HEX_SIZE/5))  
+        font = pygame.font.Font(None, int(HEX_SIZE/5 * scale.x))  
         power_text = font.render(str(self.power), True, Colors.BLACK.value) 
-        power_y = self.y-HEX_SIZE/3
-        _draw_centered(window, power_text, self.x, power_y)
+        power_y = y-HEX_SIZE/3
+        power_pos = worldToScreen(Vector2(x,power_y), offset, scale)
+        draw_centered(window, power_text, power_pos)
 
     def fortify(self):
         #Fortification bonus calculations
@@ -232,7 +247,11 @@ class Troop(Entity, ABC):
 
 class Warrior(Troop):
     def __init__(self, moves, max_moves, health, max_health, power, player_id, row, col, fortified : FortifiedBonus=FortifiedBonus.NONE, hp_power_loss=0, attack_range=1):
-        super().__init__(moves, max_moves, health, max_health, power, player_id, row, col, WARRIOR_IMAGE, fortified, hp_power_loss, attack_range)
+        super().__init__(moves, max_moves, health, max_health, power, player_id, row, col, fortified, hp_power_loss, attack_range)
+
+    def draw(self, window, player_id, offset, scale):
+        self.update_images(scale)
+        super().draw(window, player_id, Entity.WARRIOR_IMAGE, offset, scale)
 
     def attack(self, defender, tiles):
         self.moves = 0
@@ -281,7 +300,11 @@ class Warrior(Troop):
 
 class Archer(Troop):
     def __init__(self, moves, max_moves, health, max_health, power, player_id, row, col, fortified : FortifiedBonus=FortifiedBonus.NONE, hp_power_loss=0, attack_range=2):
-        super().__init__(moves, max_moves, health, max_health, power, player_id, row, col, ARCHER_IMAGE, fortified, hp_power_loss, attack_range)
+        super().__init__(moves, max_moves, health, max_health, power, player_id, row, col, fortified, hp_power_loss, attack_range)
+
+    def draw(self, window, player_id, offset, scale):
+        self.update_images(scale)
+        super().draw(window, player_id, Entity.ARCHER_IMAGE, offset, scale)
 
     def attack(self, defender, tiles):
         self.moves = 0
@@ -313,7 +336,11 @@ class Archer(Troop):
 
 class Center(Entity):
     def __init__(self, health, max_health, power, player_id, row, col, hp_power_loss=0, attack_range=0):
-        super().__init__(health, max_health, power, player_id, row, col, CITY_CENTER_IMAGE, hp_power_loss, attack_range)
+        super().__init__(health, max_health, power, player_id, row, col, hp_power_loss, attack_range)
+
+    def draw(self, window, player_id, offset, scale):
+        self.update_images(scale)
+        super().draw(window, player_id, Entity.CITY_CENTER_IMAGE, offset, scale)
 
     def kill(self, tiles):
         self.health = 0

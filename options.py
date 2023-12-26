@@ -1,7 +1,18 @@
 from enum import Enum
+from pygame.math import Vector2
+
+def worldToScreen(world, offset, scale):
+    return Vector2(int((world.x - offset.x) * scale.x), int((world.y - offset.y) * scale.y))
+
+def screenToWorld(screen, offset, scale):
+    return Vector2(screen.x / scale.x + offset.x, screen.y / scale.y + offset.y)
+
+def draw_centered(window, image, pos):
+        rect = image.get_rect(center=pos)
+        window.blit(image, rect)
 
 class TileType(Enum):
-    SEA = 1
+    WATER = 1
     PLAINS = 2
     FOREST = 3
     HILLS = 4
@@ -31,14 +42,8 @@ class Rewards(Enum):
 DIRECTIONS_ODD = ((-1, 0), (-1, 1), (0, 1), (1, 1), (1, 0), (0, -1))
 DIRECTIONS_EVEN = ((-1, -1), (-1, 0), (0, 1), (1, 0), (1, -1), (0, -1))
 
-HEX_SIZE = 120
-
 MARGIN = 30
-
-#pygame window
-WIDTH, HEIGHT = 1100, 1000
-
-
+HEX_SIZE = 120
 #fortified bonus is given when a troop has fortified and not used any movement
 # Each turn of max movement and fortified increases starting from first to second
 #if moves and fortifies None bonus (doesn't matter now you can't move without using all movement)
