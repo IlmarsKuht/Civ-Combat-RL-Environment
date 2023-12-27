@@ -1,6 +1,7 @@
 # CivCombat
 
 Welcome to CivCombat, a turn-based strategy game inspired by the Civilization game trilogy. Designed for both Multi-Agent and Single-Agent reinforcement learning, CivCombat is built on the gymnasium RL framework. Our goal is to eventually integrate it into the Gymnasium or PettingZoo libraries. 
+All contribution is welcome!
 
 ## Installation
 Python 3.11.3, rest is in requirements.txt, install with pip install -r requirements.txt
@@ -50,5 +51,6 @@ Entities have unique abilities and constraints, including attack ranges and move
 - Implementation of resource collection mechanics.
 - Introduction of Fog of War for strategic gameplay.
 - Establishment of alliances and diplomatic relations.
+- Any other suggestions are welcome!
 
 Stay tuned for more updates as we expand the world of CivCombat!
