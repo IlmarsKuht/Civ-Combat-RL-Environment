@@ -7,7 +7,7 @@ from collections import deque
 import numpy as np
 
 from options import Colors, FortifiedBonus, PLAYER_COLOR, BOT_COLORS, MARGIN, Rewards, \
-                    DIRECTIONS_ODD, DIRECTIONS_EVEN, HEX_SIZE, screenToWorld, worldToScreen, \
+                    DIRECTIONS_ODD, DIRECTIONS_EVEN, HEX_SIZE, worldToScreen, \
                     draw_centered
 
 class Player:

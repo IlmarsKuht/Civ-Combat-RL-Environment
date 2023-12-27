@@ -6,7 +6,7 @@ import numpy as np
 
 
 from options import TileType, CnnChannels, Rewards, \
-    DIRECTIONS_ODD, DIRECTIONS_EVEN, MARGIN, HEX_SIZE, worldToScreen, screenToWorld, \
+    DIRECTIONS_ODD, DIRECTIONS_EVEN, MARGIN, HEX_SIZE, worldToScreen, \
     draw_centered
 
 class Tile:

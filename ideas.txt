@@ -5,6 +5,8 @@ warrior can't attack next to himself if enemy is on hills or forest
 ARcher attack is not what I wanted, but maybe it's fine?
 pygame setting resolution to screen size sets it to fullscreen, but I don't want fullscreen
 Moves don't update correctly for entities. Forest and hills should do -1.5 but only shows up as -1 in the UI
+The unit tests are awful
+If no space for cities, then it just crashes, no that is stupid.
 
 !!!!!!!!!!!!!!!!! Write a better readme before opening issues  !!!!!!!!!!!!
 

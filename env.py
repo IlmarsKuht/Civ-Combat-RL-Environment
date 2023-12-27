@@ -5,10 +5,10 @@ import random
 from pygame.math import Vector2
 from collections import deque
 
-from terrain import Terrain, Tile
-from entities import Warrior, Archer, Center, Player, Entity
+from terrain import Terrain
+from entities import Warrior, Archer, Center, Player
 from options import CnnChannels, DIRECTIONS_EVEN, DIRECTIONS_ODD, Rewards, \
-     MARGIN, Colors, HEX_SIZE, screenToWorld, worldToScreen
+     MARGIN, Colors, HEX_SIZE, screenToWorld
 
 class Civ6CombatEnv(gym.Env):
     """Custom Environment that follows gym interface."""

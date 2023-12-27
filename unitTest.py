@@ -12,7 +12,7 @@ def stable_baselines_test():
 
 
 def random_test():
-    env = Civ6CombatEnv(rows=6, columns=6, max_steps=100, render_mode=None)
+    env = Civ6CombatEnv(rows=7, columns=7, max_steps=100, render_mode=None)
     env.reset()
     for i in range(10000):
         _, _, terminated, truncated, _ = env.step(env.action_space.sample())
@@ -20,7 +20,7 @@ def random_test():
             env.reset()
         if i%1000==0:
             print(f"iteration {i}")
-    env = Civ6CombatEnv(rows=6, columns=6, max_steps=10, render_mode="human", fps=100)
+    env = Civ6CombatEnv(rows=7, columns=7, max_steps=10, render_mode="human", fps=100)
     env.reset()
     for i in range(100):
         _, _, terminated, truncated, _ = env.step(env.action_space.sample())
