@@ -256,7 +256,7 @@ class Warrior(Troop):
     def attack(self, defender, tiles):
         self.moves = 0
         self._remove_fortify_bonus()
-        #get the defending and attacking troops power
+       
         def_power = defender.power 
         attack_power = self.power
 

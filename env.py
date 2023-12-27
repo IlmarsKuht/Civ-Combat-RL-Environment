@@ -47,7 +47,7 @@ class Civ6CombatEnv(gym.Env):
             gym.spaces.Tuple((gym.spaces.Discrete(rows), gym.spaces.Discrete(columns)))  # Tuple for 'where to move'
         ))
         
-        #Setting up observation space
+        #this will change, I have no idea what should the observations be
         self.observation_space = gym.spaces.Box(low=-1, high=1, shape=(len(CnnChannels), self.col_count, self.row_count,), dtype=np.float32)
         
         #check if render_mode is valid
@@ -92,14 +92,15 @@ class Civ6CombatEnv(gym.Env):
             self._render_frame()
 
         #do ai move, reset player moves
-        ai_turn = all([troop.moves==0 for troop in self.player.troops])
+        ai_turn = all([troop.moves<=0 for troop in self.player.troops])
         if ai_turn:
             self._reset_moves(self.player)
             for bot in self.bots:
-                #THIS DOESN'T WORK IF THERE ARE MULTIPLE BOTS, ONLY SHOULD GIVE NEGATIVE REWARD IF PLAYER IS ATTACKED, NOT OTHER BOTS
                 reward -= self._ai_sim(bot)
                 self._reset_moves(bot)
-                self._cleanup(bot)
+                #Need to clear all bots, because he could have killed any of them. Need to do this better.
+                for cleanup_bot in self.bots:
+                    self._cleanup(cleanup_bot)
 
             reward -= self._cleanup(self.player)
 
@@ -231,10 +232,10 @@ class Civ6CombatEnv(gym.Env):
             #I MAKE 2 TIMES MORE TROOPS, REMOVE LATER PROBABLY
             positions = self._get_troop_positions(row, col, troop_amount)
             for troop_row, troop_col in positions:
-                self._create_warrior(player, 2, 2, 100, 100, 55, troop_row, troop_col)
+                self._create_warrior(player, 3, 3, 100, 100, 55, troop_row, troop_col)
             positions = self._get_troop_positions(row, col, troop_amount)
             for troop_row, troop_col in positions:
-                self._create_archer(player, 2, 2, 100, 100, 55, troop_row, troop_col)
+                self._create_archer(player, 3, 3, 100, 100, 55, troop_row, troop_col)
                 
 
     def close(self):
@@ -279,7 +280,6 @@ class Civ6CombatEnv(gym.Env):
         self._update_ownership(row, col, player.id, 3)
 
     def _update_ownership(self, row, col, new_owner, distance=3):
-        # Create a visited set to keep track of already visited nodes
         visited = set()
 
         # Use a queue to perform a breadth-first search
