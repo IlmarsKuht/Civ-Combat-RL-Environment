@@ -10,7 +10,7 @@ Dive into the world of CivCombat with these preview images showcasing our proced
 ![Starting Position 1](./preview/starting_pos1.png)
 
 ### Procedurally Generated Terrain Example #2
-![Starting Position 2](./preview/starting_pos.png)
+![Starting Position 2](./preview/starting_pos2.png)
 
 ### Gameplay: Movement and Attacking
 ![Movement and Attacking](./preview/attack_moving.png)
@@ -32,7 +32,7 @@ Dive into the world of CivCombat with these preview images showcasing our proced
 - **Archer:** Engages enemies within a 2 tile range. Also moves up to 3 tiles.
 - **City Center:** The heart of your civilization. Immovable and vital for your survival, it controls a 3 hex range area.
 
-Entities have unique abilities and constraints, including attack ranges and movement capabilities. Players can also fortify troops for enhanced defense.
+Entities have unique abilities and constraints, including attack ranges and movement capabilities. Players can also fortify troops for enhanced defense by moving to the same position as the troop.
 
 ### User Interface
 
