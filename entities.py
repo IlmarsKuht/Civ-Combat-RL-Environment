@@ -193,14 +193,14 @@ class Troop(Entity, ABC):
     #can pass through team and enemy troops
     def get_reachable_pos(self, tiles):
         observation = np.full((len(tiles), len(tiles[0])), -1)
-        queue = deque([(self.row, self.col, 0)])
-        end_condition = max(self.moves, self.attack_range)
+        queue = deque([(self.row, self.col, 0, 0)])
+        max_moves = self.moves
 
         def is_valid_tile(x, y):
             return 0 <= x < len(tiles) and 0 <= y < len(tiles[0])
 
         while queue:
-            curr_x, curr_y, moves = queue.popleft()
+            curr_x, curr_y, moves, attack_moves = queue.popleft()
 
             curr_tile = tiles[curr_x, curr_y]
             curr_obs = observation[curr_x, curr_y]
@@ -215,17 +215,17 @@ class Troop(Entity, ABC):
                 observation[curr_x, curr_y] = 0
                 continue
             elif (tile_troop and tile_troop.player_id != self.player_id) or (tile_building and tile_building.player_id != self.player_id):
-                observation[curr_x, curr_y] = -2 if moves <= self.attack_range else 0
+                observation[curr_x, curr_y] = -2 if attack_moves <= self.attack_range else 0
                 continue
             elif moves <= self.moves:
                 observation[curr_x, curr_y] = moves
 
-            if moves < end_condition:
+            if moves < max_moves or attack_moves < self.attack_range:
                 directions = DIRECTIONS_EVEN if curr_x % 2 == 0 else DIRECTIONS_ODD
                 for dx, dy in directions:
                     nx, ny = curr_x + dx, curr_y + dy
                     if is_valid_tile(nx, ny):
-                        queue.append((nx, ny, moves + tiles[nx, ny].move_cost))
+                        queue.append((nx, ny, moves + tiles[nx, ny].move_cost, attack_moves+1))
 
         observation[self.row, self.col] = self.max_moves
         return observation
