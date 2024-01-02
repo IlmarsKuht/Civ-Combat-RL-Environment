@@ -192,7 +192,7 @@ class Troop(Entity, ABC):
         """
     #can pass through team and enemy troops
     def get_reachable_pos(self, tiles):
-        observation = np.full((len(tiles), len(tiles[0])), -1)
+        observation = np.full((len(tiles), len(tiles[0])), -1.0)
         queue = deque([(self.row, self.col, 0, 0)])
         max_moves = self.moves
 
