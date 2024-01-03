@@ -1,3 +1,6 @@
+import functools
+import gymnasium
+
 import pygame
 import gymnasium as gym
 import numpy as np
@@ -5,24 +8,31 @@ import random
 from pygame.math import Vector2
 from collections import deque
 
+from pettingzoo import AECEnv
+from pettingzoo.utils import agent_selector, wrappers
+
 from terrain import Terrain
 from entities import Warrior, Archer, Center, Player
 from options import CnnChannels, DIRECTIONS_EVEN, DIRECTIONS_ODD, Rewards, \
      MARGIN, Colors, HEX_SIZE, screenToWorld
 
-class Civ6CombatEnv(gym.Env):
-    """Custom Environment that follows gym interface."""
+def env(render_mode=None):
+    internal_render_mode = render_mode
+    env = raw_env(render_mode=internal_render_mode)
+    env = wrappers.AssertOutOfBoundsWrapper(env)
+    env = wrappers.OrderEnforcingWrapper(env)
+    return env
 
-    metadata = {"render_modes": ["human", "interactable"], "render_fps": 2}
+class raw_env(AECEnv):
+    metadata = {"render_modes": ["human", "interactable"], "render_fps": 2, "name": "hex_combat_v1"}
 
-    def __init__(self, rows=6, columns=6, max_steps=100, render_mode=None, bots=1, start_troops=2, fps=None):
-        super().__init__()
+    def __init__(self, rows=6, columns=6, max_steps=100, render_mode=None, opponents=1, start_troops=2, fps=None):
         if fps:
             self.metadata["render_fps"] = fps
         #Game variables
         self.row_count = rows
         self.col_count = columns
-        self.bot_count = bots
+        self.bot_count = opponents
         self.start_troop_count = start_troops
         self.bots = []
 
@@ -41,25 +51,26 @@ class Civ6CombatEnv(gym.Env):
         #set offset to margin later, then remove margin from all other places
         self.offset = pygame.math.Vector2(0, 0)
         self.scale = pygame.math.Vector2(1, 1)
-
-        self.action_space = gym.spaces.Tuple((
-            gym.spaces.Tuple((gym.spaces.Discrete(rows), gym.spaces.Discrete(columns))), # Tuple for 'what to move'
-            gym.spaces.Tuple((gym.spaces.Discrete(rows), gym.spaces.Discrete(columns)))  # Tuple for 'where to move'
-        ))
         
-        #this will change, I have no idea what should the observations be
-        self.observation_space = gym.spaces.Box(low=-1, high=1, shape=(len(CnnChannels), self.col_count, self.row_count,), dtype=np.float32)
-        
-        #check if render_mode is valid
         assert render_mode is None or render_mode in self.metadata["render_modes"], f"Invalid render mode, available render modes are {self.metadata['render_modes']}"
         self.render_mode = render_mode
         
         self.max_steps = max_steps
 
+    #NEEDS TO BE CHANGED TO SOMETHING ELSE, decide if it changes or not then remove caching if changes
+    @functools.lru_cache(maxsize=None)
+    def observation_space(self, agent):
+        return gym.spaces.Box(low=-1, high=1, shape=(len(CnnChannels), self.col_count, self.row_count,), dtype=np.float32)
+
+    @functools.lru_cache(maxsize=None)
+    def action_space(self, agent):
+        return gym.spaces.Tuple((
+            gym.spaces.Tuple((gym.spaces.Discrete(self.row_count), gym.spaces.Discrete(self.col_count))), # Tuple for 'what to move'
+            gym.spaces.Tuple((gym.spaces.Discrete(self.row_count), gym.spaces.Discrete(self.col_count)))  # Tuple for 'where to move'
+        ))
 
     def _get_obs(self):
-        observation = self.terrain.get_obs(self.player)
-        return observation
+        return self.terrain.get_obs(self.player)
     
     def _get_info(self):
         return {}
@@ -89,7 +100,7 @@ class Civ6CombatEnv(gym.Env):
             reward += self._cleanup(bot)
 
         if self.render_mode in ["human", "interactable"]:
-            self._render_frame()
+            self.render()
 
         #do ai move, reset player moves
         ai_turn = all([troop.moves<=0 for troop in self.player.troops])
@@ -146,7 +157,7 @@ class Civ6CombatEnv(gym.Env):
                 reward += curr_reward
 
             if self.render_mode in ["human", "interactable"]:
-                self._render_frame()
+                self.render()
             #if still has moves, put it back
             if troop.moves > 0:
                 troops.append(troop)
@@ -208,7 +219,7 @@ class Civ6CombatEnv(gym.Env):
         info = self._get_info()
 
         if self.render_mode in ["human", "interactable"]:
-            self._render_frame()
+            self.render()
 
         return observation, info
     
@@ -243,14 +254,21 @@ class Civ6CombatEnv(gym.Env):
             pygame.display.quit()
             pygame.quit()
 
-    def _render_frame(self):
-        self.window.fill((0, 0, 0))  # clear the screen before drawing
-        self.terrain.draw(self.window, self.player.id, self.offset, self.scale)
-        self._render_game_info()
+    def render(self):
+        if self.render_mode == None:
+            gymnasium.logger.warn(
+                "You are calling render method without specifying any render mode."
+            )
+            return
+        elif self.render_mode == "human":
+            self.window.fill((0, 0, 0))  # clear the screen before drawing
+            self.terrain.draw(self.window, self.player.id, self.offset, self.scale)
+            self._render_game_info()
 
-        pygame.event.pump()
-        pygame.display.update()  
-        self.clock.tick(self.metadata["render_fps"])
+            pygame.event.pump()
+            pygame.display.update()  
+            self.clock.tick(self.metadata["render_fps"])
+        
     
     def _render_game_info(self):
         x = MARGIN
@@ -354,7 +372,7 @@ class Civ6CombatEnv(gym.Env):
                 if event.type == pygame.VIDEORESIZE:
                     self.window = pygame.display.set_mode((event.w, event.h),
                                                     pygame.RESIZABLE)
-                    self._render_frame()
+                    self.render()
                 if event.type == pygame.KEYDOWN:
                     pos = pygame.mouse.get_pos()
                     before = screenToWorld(Vector2(pos[0], pos[1]), self.offset, self.scale)
@@ -368,7 +386,7 @@ class Civ6CombatEnv(gym.Env):
                     self.offset.x += before.x - after.x
                     self.offset.y += before.y - after.y
                     
-                    self._render_frame()
+                    self.render()
                     
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     start_pan = pygame.mouse.get_pos()
@@ -377,7 +395,7 @@ class Civ6CombatEnv(gym.Env):
                     self.offset.x -= (end_pan[0] - start_pan[0]) / self.scale.x
                     self.offset.y -= (end_pan[1] - start_pan[1]) / self.scale.y
                     start_pan = end_pan
-                    self._render_frame()
+                    self.render()
                 #I don't want this to happen if panning is happening, starting or ending
                 if event.type == pygame.MOUSEBUTTONUP:
                     x, y = pygame.mouse.get_pos()
@@ -420,4 +438,4 @@ class Civ6CombatEnv(gym.Env):
                             self.reset()
                             terminated, truncated = False, False
                         else:
-                            self._render_frame()
+                            self.render()
