@@ -151,8 +151,8 @@ class Troop(Entity, ABC):
         draw_centered(window, power_text, power_pos)
 
     def fortify(self):
-        #Fortification bonus calculations
         if self.moves == self.max_moves:
+            self.health = min(self.health + 10, self.max_health)
             if self.fortified == FortifiedBonus.NONE:
                 self.fortified = FortifiedBonus.FIRST
                 self.power += FortifiedBonus.FIRST.value
